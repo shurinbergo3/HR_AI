@@ -27,6 +27,39 @@ function isDayLimit(err: unknown): boolean {
 function buildSystemPrompt(language: string) {
   return `You are a senior HR consultant (15yr exp). Respond entirely in ${language}. You can read any language but always output in ${language}.
 
+## STEP 0 — INPUT VALIDATION (MANDATORY, run before anything else)
+
+Before any analysis, verify BOTH inputs are legitimate:
+
+**Job Description is valid if it contains AT LEAST 3 of:**
+- Role title or position name
+- Required skills, tools, or technologies
+- Responsibilities or duties
+- Experience requirements (years, domain)
+- Company context or team description
+
+**Resume is valid if it contains AT LEAST 2 of:**
+- Name or contact info
+- Work experience (company, role, dates)
+- Education or certifications
+- Skills or competencies
+
+**If the Job Description is NOT a real job posting** (e.g. it's a question, random text, single sentence, or unrelated content), output ONLY this and nothing else:
+
+⚠️ **Invalid Job Description**
+The text provided does not appear to be a job description. Please paste a real job posting that includes the role title, required skills, and responsibilities.
+
+**If the Resume is NOT a real resume**, output ONLY this:
+
+⚠️ **Invalid Resume**
+The uploaded file does not appear to contain a resume. Please upload a CV or resume document.
+
+Only proceed to analysis if BOTH inputs pass validation.
+
+---
+
+## ANALYSIS (only if both inputs are valid)
+
 SCORING (mandatory thresholds):
 - <65% → "Do Not Hire"
 - 65-79% → "Hold for Interview"
@@ -145,48 +178,55 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        let lastErr: unknown = null;
+        let closed = false;
+        const safeEnqueue = (data: Uint8Array) => { try { if (!closed) controller.enqueue(data); } catch {} };
+        const safeClose = () => { try { if (!closed) { closed = true; controller.close(); } } catch {} };
 
-        for (const model of FALLBACK_MODELS) {
-          let dayLimitHit = false;
+        try {
+          let lastErr: unknown = null;
 
-          const result = streamText({
-            model: groq(model),
-            system: buildSystemPrompt(language),
-            messages,
-            maxRetries: 0,
-          });
+          for (const model of FALLBACK_MODELS) {
+            let dayLimitHit = false;
 
-          try {
-            for await (const event of result.fullStream) {
-              if (event.type === "text-delta") {
-                controller.enqueue(encoder.encode(event.text));
-              } else if (event.type === "error") {
-                if (isDayLimit(event.error)) { dayLimitHit = true; lastErr = event.error; break; }
-                const { message } = parseGroqError(event.error);
-                controller.enqueue(encoder.encode(`__ERROR__:${message}`));
-                controller.close();
+            const result = streamText({
+              model: groq(model),
+              system: buildSystemPrompt(language),
+              messages,
+              maxRetries: 0,
+            });
+
+            try {
+              for await (const event of result.fullStream) {
+                if (event.type === "text-delta") {
+                  safeEnqueue(encoder.encode(event.text));
+                } else if (event.type === "error") {
+                  if (isDayLimit(event.error)) { dayLimitHit = true; lastErr = event.error; break; }
+                  const { message } = parseGroqError(event.error);
+                  safeEnqueue(encoder.encode(`__ERROR__:${message}`));
+                  return;
+                }
+              }
+            } catch (err) {
+              if (isDayLimit(err)) { dayLimitHit = true; lastErr = err; }
+              else {
+                const { message } = parseGroqError(err);
+                safeEnqueue(encoder.encode(`__ERROR__:${message}`));
                 return;
               }
             }
-          } catch (err) {
-            if (isDayLimit(err)) { dayLimitHit = true; lastErr = err; }
-            else {
-              const { message } = parseGroqError(err);
-              controller.enqueue(encoder.encode(`__ERROR__:${message}`));
-              controller.close();
-              return;
-            }
+
+            if (!dayLimitHit) return;
           }
 
-          if (!dayLimitHit) { controller.close(); return; }
-          // else try next model
+          // All models exhausted
+          const { message } = parseGroqError(lastErr);
+          safeEnqueue(encoder.encode(`__ERROR__:${message}`));
+        } catch (err) {
+          const { message } = parseGroqError(err);
+          safeEnqueue(encoder.encode(`__ERROR__:${message}`));
+        } finally {
+          safeClose();
         }
-
-        // All models exhausted
-        const { message } = parseGroqError(lastErr);
-        controller.enqueue(encoder.encode(`__ERROR__:${message}`));
-        controller.close();
       },
     });
 

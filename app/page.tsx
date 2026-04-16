@@ -139,7 +139,10 @@ export default function Home() {
   }, [groqLimitUntil]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatEndRef.current) {
+      const container = chatEndRef.current.parentElement;
+      if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
   }, [chatHistories, activeChatId]);
 
   const addFiles = useCallback((incoming: FileList | File[]) => {

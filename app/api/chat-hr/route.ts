@@ -92,44 +92,51 @@ BEHAVIOR RULES:
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        let lastErr: unknown = null;
+        let closed = false;
+        const safeEnqueue = (data: Uint8Array) => { try { if (!closed) controller.enqueue(data); } catch {} };
+        const safeClose = () => { try { if (!closed) { closed = true; controller.close(); } } catch {} };
 
-        for (const model of FALLBACK_MODELS) {
-          let dayLimitHit = false;
+        try {
+          let lastErr: unknown = null;
 
-          const result = streamText({
-            model: groq(model),
-            system: systemPrompt,
-            messages,
-            maxRetries: 0,
-          });
+          for (const model of FALLBACK_MODELS) {
+            let dayLimitHit = false;
 
-          try {
-            for await (const event of result.fullStream) {
-              if (event.type === "text-delta") {
-                controller.enqueue(encoder.encode(event.text));
-              } else if (event.type === "error") {
-                if (isDayLimit(event.error)) { dayLimitHit = true; lastErr = event.error; break; }
-                controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(event.error)}`));
-                controller.close();
+            const result = streamText({
+              model: groq(model),
+              system: systemPrompt,
+              messages,
+              maxRetries: 0,
+            });
+
+            try {
+              for await (const event of result.fullStream) {
+                if (event.type === "text-delta") {
+                  safeEnqueue(encoder.encode(event.text));
+                } else if (event.type === "error") {
+                  if (isDayLimit(event.error)) { dayLimitHit = true; lastErr = event.error; break; }
+                  safeEnqueue(encoder.encode(`__ERROR__:${parseGroqError(event.error)}`));
+                  return;
+                }
+              }
+            } catch (err) {
+              if (isDayLimit(err)) { dayLimitHit = true; lastErr = err; }
+              else {
+                safeEnqueue(encoder.encode(`__ERROR__:${parseGroqError(err)}`));
                 return;
               }
             }
-          } catch (err) {
-            if (isDayLimit(err)) { dayLimitHit = true; lastErr = err; }
-            else {
-              controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(err)}`));
-              controller.close();
-              return;
-            }
+
+            if (!dayLimitHit) return;
           }
 
-          if (!dayLimitHit) { controller.close(); return; }
+          // All models exhausted
+          safeEnqueue(encoder.encode(`__ERROR__:${parseGroqError(lastErr)}`));
+        } catch (err) {
+          safeEnqueue(encoder.encode(`__ERROR__:${parseGroqError(err)}`));
+        } finally {
+          safeClose();
         }
-
-        // All models exhausted
-        controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(lastErr)}`));
-        controller.close();
       },
     });
 
