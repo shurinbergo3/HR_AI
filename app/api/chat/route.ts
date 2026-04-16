@@ -160,7 +160,7 @@ export async function POST(req: Request) {
           try {
             for await (const event of result.fullStream) {
               if (event.type === "text-delta") {
-                controller.enqueue(encoder.encode(event.textDelta));
+                controller.enqueue(encoder.encode(event.text));
               } else if (event.type === "error") {
                 if (isDayLimit(event.error)) { dayLimitHit = true; lastErr = event.error; break; }
                 const { message } = parseGroqError(event.error);
