@@ -1,5 +1,22 @@
 export type Locale = "en" | "pl";
 
+export const quickQuestions: Record<Locale, string[]> = {
+  en: [
+    "What are this candidate's key strengths?",
+    "What are the main hiring risks?",
+    "Suggest 3 advanced interview questions",
+    "How quickly could this candidate onboard?",
+    "Compare candidate to job requirements",
+  ],
+  pl: [
+    "Jakie są kluczowe mocne strony kandydata?",
+    "Jakie są główne ryzyka zatrudnienia?",
+    "Zaproponuj 3 zaawansowane pytania rekrutacyjne",
+    "Jak szybko kandydat wdroży się w pracę?",
+    "Porównaj kandydata z wymaganiami stanowiska",
+  ],
+};
+
 export const dict: Record<Locale, Record<string, string>> = {
   en: {
     title: "AI HR Assistant",

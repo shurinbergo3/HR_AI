@@ -29,7 +29,7 @@ import {
   Check,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { dict, type Locale } from "@/lib/locale";
+import { dict, quickQuestions, type Locale } from "@/lib/locale";
 import { LogoFull } from "./components/Logo";
 
 interface CandidateFile {
@@ -267,20 +267,24 @@ export default function Home() {
   const activeResult = results.find((r) => r.id === activeChatId) ?? null;
   const activeMessages = activeChatId ? (chatHistories[activeChatId] ?? []) : [];
 
-  const sendChatMessage = async () => {
-    if (!chatInput.trim() || !activeChatId || chatLoading) return;
-    const result = results.find((r) => r.id === activeChatId);
+  const sendChatMessage = async (overrideMsg?: string, overrideId?: string) => {
+    const targetId = overrideId ?? activeChatId;
+    const message = overrideMsg ?? chatInput.trim();
+    if (!message || !targetId || chatLoading) return;
+    const result = results.find((r) => r.id === targetId);
     if (!result) return;
 
-    const userMsg: ChatMessage = { role: "user", content: chatInput.trim() };
-    setChatInput("");
+    setActiveChatId(targetId);
+    const userMsg: ChatMessage = { role: "user", content: message };
+    if (!overrideMsg) setChatInput("");
 
-    const updatedHistory = [...activeMessages, userMsg];
-    setChatHistories((prev) => ({ ...prev, [activeChatId]: updatedHistory }));
+    const currentHistory = chatHistories[targetId] ?? [];
+    const updatedHistory = [...currentHistory, userMsg];
+    setChatHistories((prev) => ({ ...prev, [targetId]: updatedHistory }));
     setChatLoading(true);
 
     const placeholderMsg: ChatMessage = { role: "assistant", content: "" };
-    setChatHistories((prev) => ({ ...prev, [activeChatId]: [...updatedHistory, placeholderMsg] }));
+    setChatHistories((prev) => ({ ...prev, [targetId]: [...updatedHistory, placeholderMsg] }));
 
     try {
       const res = await fetch("/api/chat-hr", {
@@ -307,37 +311,37 @@ export default function Home() {
         buf += decoder.decode(value, { stream: true });
         if (buf.startsWith("__ERROR__:")) break;
         setChatHistories((prev) => {
-          const msgs = [...(prev[activeChatId] ?? [])];
+          const msgs = [...(prev[targetId] ?? [])];
           msgs[msgs.length - 1] = { role: "assistant", content: buf };
-          return { ...prev, [activeChatId]: msgs };
+          return { ...prev, [targetId]: msgs };
         });
       }
       buf += decoder.decode();
 
       if (buf.startsWith("__ERROR__:")) {
         const errCode = buf.slice("__ERROR__:".length);
-        let userMsg = "Error getting response. Please try again.";
+        let errMsg = "Error getting response. Please try again.";
         if (errCode.startsWith("GROQ_TOKEN_DAY_LIMIT:")) {
           const sec = parseFloat(errCode.split(":")[1]) || 1800;
           setGroqLimitUntil(Date.now() + Math.ceil(sec) * 1000);
-          userMsg = "Groq daily token limit reached. Please wait for the countdown and try again.";
+          errMsg = "Groq daily token limit reached. Please wait for the countdown and try again.";
         } else if (errCode.startsWith("GROQ_TOKEN_MIN_LIMIT:") || errCode.startsWith("GROQ_RATE_LIMIT:")) {
           const sec = parseFloat(errCode.split(":")[1]) || 60;
           setGroqLimitUntil(Date.now() + Math.ceil(sec) * 1000);
-          userMsg = "Rate limit reached. Please wait a moment.";
+          errMsg = "Rate limit reached. Please wait a moment.";
         }
         setChatHistories((prev) => {
-          const msgs = [...(prev[activeChatId] ?? [])];
-          msgs[msgs.length - 1] = { role: "assistant", content: userMsg };
-          return { ...prev, [activeChatId]: msgs };
+          const msgs = [...(prev[targetId] ?? [])];
+          msgs[msgs.length - 1] = { role: "assistant", content: errMsg };
+          return { ...prev, [targetId]: msgs };
         });
         return;
       }
     } catch {
       setChatHistories((prev) => {
-        const msgs = [...(prev[activeChatId] ?? [])];
+        const msgs = [...(prev[targetId] ?? [])];
         msgs[msgs.length - 1] = { role: "assistant", content: "Error getting response. Please try again." };
-        return { ...prev, [activeChatId]: msgs };
+        return { ...prev, [targetId]: msgs };
       });
     } finally {
       setChatLoading(false);
@@ -428,9 +432,9 @@ export default function Home() {
           <p className="text-gray-500">{t.subtitle}</p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 md:auto-rows-fr">
+        <div className="grid gap-6 md:grid-cols-2 items-stretch">
           {/* Job Description */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 h-full">
             <label className="text-sm font-medium text-gray-600 ml-1">{t.jobDescLabel}</label>
             <textarea
               value={jobDesc}
@@ -441,7 +445,7 @@ export default function Home() {
           </div>
 
           {/* File Upload */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 h-full">
             <label className="text-sm font-medium text-gray-600 ml-1">{t.uploadLabel}</label>
             <div className="flex flex-col flex-1 gap-3">
               <div
@@ -449,19 +453,21 @@ export default function Home() {
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
                 onClick={() => fileRef.current?.click()}
-                className={`glass flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 py-10 cursor-pointer transition-all ${
-                  dragOver ? "border-blue-400 !bg-blue-50/40" : "border-white/40 hover:border-blue-300/60"
-                }`}
+                className={`glass flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 transition-all duration-300 cursor-pointer ${
+                  candidates.length > 0 ? "py-5" : "py-10 flex-1"
+                } ${dragOver ? "border-blue-400 !bg-blue-50/40 scale-[1.01]" : "border-white/40 hover:border-blue-300/60 hover:scale-[1.005]"}`}
               >
-                <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-100/60 backdrop-blur-sm">
-                  <Upload className="h-6 w-6 text-blue-500" />
+                <div className={`flex items-center justify-center rounded-2xl bg-blue-100/60 backdrop-blur-sm transition-all duration-300 ${
+                  candidates.length > 0 ? "w-9 h-9" : "w-12 h-12"
+                }`}>
+                  <Upload className={`text-blue-500 transition-all duration-300 ${candidates.length > 0 ? "h-4 w-4" : "h-6 w-6"}`} />
                 </div>
-                <span className="text-sm text-gray-500">{t.uploadHint}</span>
+                <span className="text-sm text-gray-500 text-center">{t.uploadHint}</span>
                 <input ref={fileRef} type="file" accept=".pdf,.docx" multiple onChange={onFileChange} className="hidden" />
               </div>
 
               {candidates.length > 0 && (
-                <div className="space-y-2">
+                <div className="flex flex-col flex-1 gap-2 animate-fade-up">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-xs text-gray-500">{candidates.length} {t.uploadedFiles}</span>
                     <button
@@ -472,9 +478,9 @@ export default function Home() {
                       {locale === "en" ? "Clear all" : "Wyczyść"}
                     </button>
                   </div>
-                  <div className="max-h-64 overflow-y-auto space-y-2.5 pr-1">
+                  <div className="overflow-y-auto space-y-2.5 pr-1 flex-1">
                     {candidates.map((c, index) => (
-                      <div key={c.file.name} className="glass rounded-xl overflow-hidden">
+                      <div key={c.file.name} className="glass rounded-xl overflow-hidden animate-slide-in">
                         <div className="flex items-center gap-2 px-3 py-2.5 text-sm group">
                           <span className="shrink-0 text-xs font-bold text-blue-600 bg-blue-100/60 rounded-full px-1.5 py-0.5 leading-none">#{index + 1}</span>
                           <FileText className="h-4 w-4 text-blue-500 shrink-0" />
@@ -586,14 +592,13 @@ export default function Home() {
                           )}
                         </button>
                       )}
-                      {r.status === "done" && (
+                      {r.status === "done" && r.content && (
                         <button
-                          onClick={() => setActiveChatId(activeChatId === r.id ? null : r.id)}
-                          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
-                            activeChatId === r.id
-                              ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
-                              : "glass text-indigo-600 hover:text-indigo-800"
-                          }`}
+                          onClick={() => {
+                            if (!r.expanded) toggleExpand(r.id);
+                            setTimeout(() => document.getElementById(`chat-${r.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+                          }}
+                          className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium glass text-indigo-600 hover:text-indigo-800 transition-all cursor-pointer"
                         >
                           <MessageSquare className="h-3.5 w-3.5" />
                           {t.chatBtn}
@@ -602,90 +607,107 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Expanded analysis */}
+                  {/* Expanded analysis + inline chat */}
                   {r.expanded && (
-                    <div className="border-t border-white/30 px-5 py-5">
-                      {r.status === "error" ? (
-                        <p className="text-sm text-red-600">{r.content}</p>
-                      ) : r.status === "streaming" && !r.content ? (
-                        <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>{t.statusStreaming}</span>
-                        </div>
-                      ) : r.status === "done" && !r.content ? (
-                        <div className="flex items-center gap-2 text-sm text-amber-600 py-2">
-                          <AlertCircle className="h-4 w-4 shrink-0" />
-                          <span>No content received. Please click Analyze Candidates again.</span>
-                        </div>
-                      ) : (
-                        <article className="prose prose-sm max-w-none prose-headings:text-blue-700 prose-strong:text-gray-800 prose-li:text-gray-600 prose-p:text-gray-600">
-                          <ReactMarkdown>{r.content}</ReactMarkdown>
-                        </article>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Inline chat panel */}
-                  {activeChatId === r.id && (
                     <div className="border-t border-white/30">
-                      {/* Chat header */}
-                      <div className="flex items-center justify-between px-5 py-3 bg-indigo-50/40">
-                        <div className="flex items-center gap-2">
-                          <MessageSquare className="h-4 w-4 text-indigo-500" />
-                          <div>
-                            <span className="text-sm font-semibold text-indigo-800">{t.chatTitle}</span>
-                            <p className="text-xs text-indigo-500">{t.chatSubtitle}</p>
+                      {/* Analysis content */}
+                      <div className="px-5 py-5">
+                        {r.status === "error" ? (
+                          <p className="text-sm text-red-600">{r.content}</p>
+                        ) : r.status === "streaming" && !r.content ? (
+                          <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>{t.statusStreaming}</span>
+                          </div>
+                        ) : r.status === "done" && !r.content ? (
+                          <div className="flex items-center gap-2 text-sm text-amber-600 py-2">
+                            <AlertCircle className="h-4 w-4 shrink-0" />
+                            <span>No content received. Please click Analyze Candidates again.</span>
+                          </div>
+                        ) : (
+                          <article className="prose prose-sm max-w-none prose-headings:text-blue-700 prose-strong:text-gray-800 prose-li:text-gray-600 prose-p:text-gray-600">
+                            <ReactMarkdown>{r.content}</ReactMarkdown>
+                          </article>
+                        )}
+                      </div>
+
+                      {/* Inline chat — always shown when analysis is done */}
+                      {r.status === "done" && r.content && (
+                        <div className="border-t border-white/30" id={`chat-${r.id}`}>
+                          {/* Chat header */}
+                          <div className="flex items-center justify-between px-5 py-3 bg-indigo-50/40">
+                            <div className="flex items-center gap-2">
+                              <MessageSquare className="h-4 w-4 text-indigo-500" />
+                              <div>
+                                <span className="text-sm font-semibold text-indigo-800">{t.chatTitle}</span>
+                                <p className="text-xs text-indigo-500">{t.chatSubtitle}</p>
+                              </div>
+                            </div>
+                            <span className="text-xs text-indigo-400 italic hidden sm:block">{t.chatContextNote}</span>
+                          </div>
+
+                          {/* Quick question tiles — shown when no messages yet */}
+                          {!(chatHistories[r.id]?.length) && (
+                            <div className="flex flex-wrap gap-2 px-5 pt-4 pb-1">
+                              {quickQuestions[locale].map((q) => (
+                                <button
+                                  key={q}
+                                  onClick={() => sendChatMessage(q, r.id)}
+                                  disabled={chatLoading}
+                                  className="text-xs px-3 py-1.5 rounded-xl glass border border-indigo-200/50 text-indigo-600 hover:text-indigo-800 hover:border-indigo-400/50 transition-all cursor-pointer disabled:opacity-40"
+                                >
+                                  {q}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Messages */}
+                          <div className="flex flex-col gap-3 px-5 py-4 max-h-96 overflow-y-auto">
+                            {(chatHistories[r.id] ?? []).map((msg, i) => (
+                              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
+                                  msg.role === "user"
+                                    ? "bg-indigo-500 text-white rounded-br-sm"
+                                    : "bg-white/60 border border-white/50 text-gray-800 rounded-bl-sm"
+                                }`}>
+                                  {msg.role === "assistant" && msg.content === "" ? (
+                                    <span className="flex items-center gap-1 text-gray-400 text-xs">
+                                      <Loader2 className="h-3 w-3 animate-spin" />{t.chatAnalyzing}
+                                    </span>
+                                  ) : (
+                                    <div className="prose prose-xs max-w-none prose-p:my-0 prose-headings:text-current prose-strong:text-current prose-li:text-current prose-p:text-current">
+                                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                            {activeChatId === r.id && <div ref={chatEndRef} />}
+                          </div>
+
+                          {/* Input */}
+                          <div className="flex items-end gap-2 px-5 pb-4">
+                            <textarea
+                              value={activeChatId === r.id ? chatInput : ""}
+                              onChange={(e) => { setActiveChatId(r.id); setChatInput(e.target.value); }}
+                              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(undefined, r.id); } }}
+                              onFocus={() => setActiveChatId(r.id)}
+                              placeholder={t.chatPlaceholder}
+                              rows={1}
+                              disabled={chatLoading && activeChatId === r.id}
+                              className="flex-1 rounded-xl border border-white/50 bg-white/40 px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/40 resize-none transition-shadow disabled:opacity-50"
+                            />
+                            <button
+                              onClick={() => sendChatMessage(undefined, r.id)}
+                              disabled={(chatLoading && activeChatId === r.id) || !(activeChatId === r.id ? chatInput.trim() : false)}
+                              className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0"
+                            >
+                              {chatLoading && activeChatId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                            </button>
                           </div>
                         </div>
-                        <span className="text-xs text-indigo-400 italic hidden sm:block">{t.chatContextNote}</span>
-                      </div>
-
-                      {/* Messages */}
-                      <div className="flex flex-col gap-3 px-5 py-4 max-h-80 overflow-y-auto">
-                        {activeMessages.length === 0 && (
-                          <p className="text-xs text-gray-400 text-center py-4">{t.chatContextNote}</p>
-                        )}
-                        {activeMessages.map((msg, i) => (
-                          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                            <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
-                              msg.role === "user"
-                                ? "bg-indigo-500 text-white rounded-br-sm"
-                                : "bg-white/60 border border-white/50 text-gray-800 rounded-bl-sm"
-                            }`}>
-                              {msg.role === "assistant" && msg.content === "" ? (
-                                <span className="flex items-center gap-1 text-gray-400 text-xs">
-                                  <Loader2 className="h-3 w-3 animate-spin" />{t.chatAnalyzing}
-                                </span>
-                              ) : (
-                                <div className="prose prose-xs max-w-none prose-p:my-0 prose-headings:text-current prose-strong:text-current prose-li:text-current prose-p:text-current">
-                                  <ReactMarkdown>{msg.content}</ReactMarkdown>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        <div ref={chatEndRef} />
-                      </div>
-
-                      {/* Input */}
-                      <div className="flex items-end gap-2 px-5 pb-4">
-                        <textarea
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          onKeyDown={onChatKeyDown}
-                          placeholder={t.chatPlaceholder}
-                          rows={1}
-                          disabled={chatLoading}
-                          className="flex-1 rounded-xl border border-white/50 bg-white/40 px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/40 resize-none transition-shadow disabled:opacity-50"
-                        />
-                        <button
-                          onClick={sendChatMessage}
-                          disabled={chatLoading || !chatInput.trim()}
-                          className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0"
-                        >
-                          {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                        </button>
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
