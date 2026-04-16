@@ -69,24 +69,39 @@ BEHAVIOR RULES:
 5. Never fabricate information about the candidate that is not in the analysis or resume.
 6. You may suggest interview questions, flag risks, compare to role requirements, or give hiring advice — all grounded in the analysis above.`;
 
-    const result = streamText({
+    const { textStream } = streamText({
       model: groq("llama-3.3-70b-versatile"),
       system: systemPrompt,
       messages,
     });
 
-    return result.toTextStreamResponse();
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of textStream) {
+            controller.enqueue(encoder.encode(chunk));
+          }
+        } catch (err) {
+          const raw = err instanceof Error ? err.message : String(err);
+          const retryFull = raw.match(/try again in (\d+)m([\d.]+)s/i);
+          const retryShort = raw.match(/try again in ([\d.]+)s/i);
+          let retrySec = 1800;
+          if (retryFull) retrySec = parseInt(retryFull[1]) * 60 + parseFloat(retryFull[2]);
+          else if (retryShort) retrySec = parseFloat(retryShort[1]);
+
+          const isDay = raw.includes("tokens per day") || raw.includes("TPD");
+          const code = isDay ? `GROQ_TOKEN_DAY_LIMIT:${retrySec}` : `GROQ_RATE_LIMIT:${retrySec}`;
+          controller.enqueue(encoder.encode(`__ERROR__:${code}`));
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   } catch (err: unknown) {
     console.error("HR chat route error:", err);
-    const msg = err instanceof Error ? err.message : "Internal server error";
-    const isTokenLimit = msg.includes("tokens per day") || msg.includes("TPD");
-    const isRateLimit = msg.includes("rate_limit_exceeded") || msg.includes("Rate limit");
-    if (isTokenLimit) {
-      const retryMatch = msg.match(/try again in ([\d]+m[\d.]+s|[\d.]+s)/i);
-      const retryIn = retryMatch ? ` Try again in ${retryMatch[1]}.` : "";
-      return new Response(`Groq daily token limit reached.${retryIn}`, { status: 429 });
-    }
-    if (isRateLimit) return new Response("Rate limit reached. Please wait a moment.", { status: 429 });
-    return new Response(msg, { status: 500 });
+    return new Response("__ERROR__:Internal server error", { status: 200 });
   }
 }

@@ -188,22 +188,7 @@ export default function Home() {
       if (candidate.additionalInfo.trim()) formData.append("additionalInfo", candidate.additionalInfo.trim());
 
       const res = await fetch("/api/chat", { method: "POST", body: formData });
-      if (!res.ok) {
-        const text = await res.text();
-        if (res.status === 429 && (text.includes("daily token limit") || text.includes("tokens per day") || text.includes("TPD"))) {
-          const retryMatch = text.match(/try again in (\d+)m([\d.]+)s/i)
-            ?? text.match(/try again in ([\d.]+)s/i);
-          if (retryMatch) {
-            const totalSec = retryMatch.length === 3
-              ? parseInt(retryMatch[1]) * 60 + parseFloat(retryMatch[2])
-              : parseFloat(retryMatch[1]);
-            setGroqLimitUntil(Date.now() + Math.ceil(totalSec) * 1000);
-          } else {
-            setGroqLimitUntil(Date.now() + 30 * 60 * 1000); // fallback 30min
-          }
-        }
-        throw new Error(text || t.errorGeneric);
-      }
+      if (!res.ok) throw new Error(t.errorGeneric);
 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
@@ -214,11 +199,35 @@ export default function Home() {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
+
+        // Detect error marker injected by server mid-stream
+        if (buf.startsWith("__ERROR__:")) break;
+
         const summary = extractSummary(buf);
         updateResult(id, { content: buf, ...summary });
       }
-      // Flush any remaining bytes held by the decoder
       buf += decoder.decode();
+
+      // Handle encoded server errors
+      if (buf.startsWith("__ERROR__:")) {
+        const errCode = buf.slice("__ERROR__:".length);
+        if (errCode.startsWith("GROQ_TOKEN_DAY_LIMIT:")) {
+          const sec = parseFloat(errCode.split(":")[1]) || 1800;
+          setGroqLimitUntil(Date.now() + Math.ceil(sec) * 1000);
+          throw new Error("Groq daily token limit reached. Please wait for the timer and try again.");
+        }
+        if (errCode.startsWith("GROQ_TOKEN_MIN_LIMIT:")) {
+          const sec = parseFloat(errCode.split(":")[1]) || 60;
+          setGroqLimitUntil(Date.now() + Math.ceil(sec) * 1000);
+          throw new Error("Groq per-minute token limit reached. Please wait a moment.");
+        }
+        if (errCode.startsWith("GROQ_RATE_LIMIT:")) {
+          const sec = parseFloat(errCode.split(":")[1]) || 60;
+          setGroqLimitUntil(Date.now() + Math.ceil(sec) * 1000);
+          throw new Error("Rate limit reached. Please wait a moment.");
+        }
+        throw new Error(errCode || t.errorGeneric);
+      }
 
       const finalSummary = extractSummary(buf);
       updateResult(id, { status: "done", content: buf, ...finalSummary });
@@ -293,11 +302,33 @@ export default function Home() {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
+        if (buf.startsWith("__ERROR__:")) break;
         setChatHistories((prev) => {
           const msgs = [...(prev[activeChatId] ?? [])];
           msgs[msgs.length - 1] = { role: "assistant", content: buf };
           return { ...prev, [activeChatId]: msgs };
         });
+      }
+      buf += decoder.decode();
+
+      if (buf.startsWith("__ERROR__:")) {
+        const errCode = buf.slice("__ERROR__:".length);
+        let userMsg = "Error getting response. Please try again.";
+        if (errCode.startsWith("GROQ_TOKEN_DAY_LIMIT:")) {
+          const sec = parseFloat(errCode.split(":")[1]) || 1800;
+          setGroqLimitUntil(Date.now() + Math.ceil(sec) * 1000);
+          userMsg = "Groq daily token limit reached. Please wait for the countdown and try again.";
+        } else if (errCode.startsWith("GROQ_TOKEN_MIN_LIMIT:") || errCode.startsWith("GROQ_RATE_LIMIT:")) {
+          const sec = parseFloat(errCode.split(":")[1]) || 60;
+          setGroqLimitUntil(Date.now() + Math.ceil(sec) * 1000);
+          userMsg = "Rate limit reached. Please wait a moment.";
+        }
+        setChatHistories((prev) => {
+          const msgs = [...(prev[activeChatId] ?? [])];
+          msgs[msgs.length - 1] = { role: "assistant", content: userMsg };
+          return { ...prev, [activeChatId]: msgs };
+        });
+        return;
       }
     } catch {
       setChatHistories((prev) => {

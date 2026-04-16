@@ -55,75 +55,62 @@ OUTPUT FORMAT (translate headings to ${language}):
 [2-3 sentences. One actionable next step.]`;
 }
 
-function parseGroqError(err: unknown): { message: string; status: number } {
-  if (!(err instanceof Error)) return { message: "Internal server error", status: 500 };
+/** Extracts a human-readable error + retry seconds from Groq/AI SDK errors. */
+function parseGroqError(err: unknown): { message: string; retrySec: number | null } {
+  const raw = err instanceof Error ? err.message : String(err);
 
-  const msg = err.message;
+  const isTokenDay = raw.includes("tokens per day") || raw.includes("TPD");
+  const isTokenMin = raw.includes("tokens per minute") || raw.includes("TPM");
+  const isRateLimit = raw.includes("rate_limit_exceeded") || raw.includes("Rate limit");
 
-  // Daily token limit
-  if (msg.includes("tokens per day") || msg.includes("TPD")) {
-    const retryMatch = msg.match(/try again in ([\d]+m[\d.]+s|[\d.]+s)/i);
-    const retryIn = retryMatch ? ` Please try again in ${retryMatch[1]}.` : "";
-    return {
-      message: `Groq daily token limit reached (100k/day on free tier).${retryIn} Upgrade at https://console.groq.com/settings/billing`,
-      status: 429,
-    };
+  // Extract "try again in Xm Y.Zs" or "try again in Y.Zs"
+  const retryFull = raw.match(/try again in (\d+)m([\d.]+)s/i);
+  const retryShort = raw.match(/try again in ([\d.]+)s/i);
+  let retrySec: number | null = null;
+  if (retryFull) {
+    retrySec = parseInt(retryFull[1]) * 60 + parseFloat(retryFull[2]);
+  } else if (retryShort) {
+    retrySec = parseFloat(retryShort[1]);
   }
 
-  // Per-minute token limit
-  if (msg.includes("tokens per minute") || msg.includes("TPM")) {
-    const retryMatch = msg.match(/try again in ([\d.]+s)/i);
-    const retryIn = retryMatch ? ` Retry in ${retryMatch[1]}.` : " Please wait a moment.";
-    return {
-      message: `Rate limit: too many tokens per minute.${retryIn}`,
-      status: 429,
-    };
+  if (isTokenDay) {
+    const wait = retrySec ? ` Retry in ${Math.ceil(retrySec / 60)}m ${Math.ceil(retrySec % 60)}s.` : "";
+    return { message: `GROQ_TOKEN_DAY_LIMIT:${retrySec ?? 1800}`, retrySec };
   }
+  if (isTokenMin) return { message: `GROQ_TOKEN_MIN_LIMIT:${retrySec ?? 60}`, retrySec };
+  if (isRateLimit) return { message: `GROQ_RATE_LIMIT:${retrySec ?? 60}`, retrySec };
 
-  // Request rate limit
-  if (msg.includes("rate_limit_exceeded") || msg.includes("Rate limit")) {
-    return { message: "Rate limit reached. Please wait a moment and try again.", status: 429 };
-  }
-
-  return { message: msg || "Internal server error", status: 500 };
+  return { message: raw || "Internal server error", retrySec: null };
 }
 
 async function extractText(file: File): Promise<string> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const ext = file.name.split(".").pop()?.toLowerCase();
-
   if (ext === "pdf") {
     const data = await pdfParse(buffer);
     return data.text;
   }
-
   if (ext === "docx") {
     const { value } = await mammoth.extractRawText({ buffer });
     return value;
   }
-
   throw new Error("Unsupported file type. Please upload PDF or DOCX.");
 }
 
 export async function POST(req: Request) {
+  // Rate limiting
+  const headersList = await headers();
+  const ip =
+    headersList.get("x-forwarded-for")?.split(",")[0].trim() ??
+    headersList.get("x-real-ip") ??
+    "unknown";
+
+  const { allowed, retryAfterSec } = checkRateLimit(ip);
+  if (!allowed) {
+    return new Response(`__ERROR__:RATE_LIMIT:${retryAfterSec}`, { status: 200 });
+  }
+
   try {
-    const headersList = await headers();
-    const ip =
-      headersList.get("x-forwarded-for")?.split(",")[0].trim() ??
-      headersList.get("x-real-ip") ??
-      "unknown";
-
-    const { allowed, retryAfterSec } = checkRateLimit(ip);
-    if (!allowed) {
-      return new Response(
-        `Too many requests. Please wait ${retryAfterSec} seconds.`,
-        {
-          status: 429,
-          headers: { "Retry-After": String(retryAfterSec) },
-        },
-      );
-    }
-
     const formData = await req.formData();
     const jobDescription = formData.get("jobDescription") as string;
     const resumeFile = formData.get("resume") as File;
@@ -131,7 +118,7 @@ export async function POST(req: Request) {
     const additionalInfo = (formData.get("additionalInfo") as string | null) || "";
 
     if (!jobDescription || !resumeFile) {
-      return new Response("Missing job description or resume file.", { status: 400 });
+      return new Response("__ERROR__:Missing job description or resume file.", { status: 200 });
     }
 
     const resumeText = await extractText(resumeFile);
@@ -140,7 +127,7 @@ export async function POST(req: Request) {
       ? `\n\n## Additional Information\n\n${additionalInfo.trim()}`
       : "";
 
-    const result = streamText({
+    const { textStream } = streamText({
       model: groq("llama-3.3-70b-versatile"),
       system: buildSystemPrompt(language),
       messages: [
@@ -151,10 +138,29 @@ export async function POST(req: Request) {
       ],
     });
 
-    return result.toTextStreamResponse();
+    // Stream manually so errors mid-stream are caught and encoded as markers
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of textStream) {
+            controller.enqueue(encoder.encode(chunk));
+          }
+        } catch (err) {
+          const { message } = parseGroqError(err);
+          controller.enqueue(encoder.encode(`__ERROR__:${message}`));
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   } catch (err: unknown) {
     console.error("API route error:", err);
-    const { message, status } = parseGroqError(err);
-    return new Response(message, { status });
+    const { message } = parseGroqError(err);
+    return new Response(`__ERROR__:${message}`, { status: 200 });
   }
 }
