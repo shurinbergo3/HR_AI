@@ -61,13 +61,13 @@ function extractSummary(md: string) {
 }
 
 function recBadgeColor(rec: string | null): string {
-  if (!rec) return "bg-gray-700 text-gray-300";
+  if (!rec) return "bg-gray-200/60 text-gray-600";
   const lower = rec.toLowerCase();
   if (lower.includes("not") || lower.includes("nie"))
-    return "bg-red-900/60 text-red-300 border border-red-700/50";
+    return "bg-red-100/70 text-red-700 border border-red-200/60";
   if (lower.includes("hold") || lower.includes("wstrzymaj"))
-    return "bg-amber-900/60 text-amber-300 border border-amber-700/50";
-  return "bg-emerald-900/60 text-emerald-300 border border-emerald-700/50";
+    return "bg-amber-100/70 text-amber-700 border border-amber-200/60";
+  return "bg-emerald-100/70 text-emerald-700 border border-emerald-200/60";
 }
 
 function isValidFile(f: File): boolean {
@@ -212,15 +212,19 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="mx-auto max-w-5xl flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-indigo-400" />
-            <span className="font-semibold text-lg tracking-tight">{t.title}</span>
+      <header className="glass-heavy sticky top-0 z-50 rounded-b-2xl">
+        <div className="mx-auto max-w-5xl flex items-center justify-between px-5 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 shadow-md shadow-blue-500/20">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            <span className="font-semibold text-lg tracking-tight text-gray-800">
+              {t.title}
+            </span>
           </div>
           <button
             onClick={() => setLocale((l) => (l === "en" ? "pl" : "en"))}
-            className="flex items-center gap-1.5 rounded-full border border-gray-700 px-3 py-1.5 text-sm hover:bg-gray-800 transition-colors"
+            className="glass flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
           >
             <Globe className="h-4 w-4" />
             {locale === "en" ? "EN → PL" : "PL → EN"}
@@ -229,25 +233,34 @@ export default function Home() {
       </header>
 
       {/* Main */}
-      <main className="flex-1 mx-auto w-full max-w-5xl px-4 py-8 space-y-8">
-        <p className="text-gray-400 text-center">{t.subtitle}</p>
+      <main className="flex-1 mx-auto w-full max-w-5xl px-4 py-10 space-y-8">
+        <div className="text-center space-y-1">
+          <h1 className="text-2xl font-bold text-gray-800">
+            {t.title}
+          </h1>
+          <p className="text-gray-500">{t.subtitle}</p>
+        </div>
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Job Description */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-300">{t.jobDescLabel}</label>
+            <label className="text-sm font-medium text-gray-600 ml-1">
+              {t.jobDescLabel}
+            </label>
             <textarea
               value={jobDesc}
               onChange={(e) => setJobDesc(e.target.value)}
               placeholder={t.jobDescPlaceholder}
               rows={12}
-              className="w-full rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none"
+              className="glass-input w-full rounded-2xl px-4 py-3.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40 resize-none transition-shadow"
             />
           </div>
 
           {/* File Upload */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-300">{t.uploadLabel}</label>
+            <label className="text-sm font-medium text-gray-600 ml-1">
+              {t.uploadLabel}
+            </label>
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -256,16 +269,18 @@ export default function Home() {
               onDragLeave={() => setDragOver(false)}
               onDrop={onDrop}
               onClick={() => fileRef.current?.click()}
-              className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 cursor-pointer transition-colors ${
+              className={`glass flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 cursor-pointer transition-all ${
                 files.length > 0 ? "py-8" : "py-16"
               } ${
                 dragOver
-                  ? "border-indigo-400 bg-indigo-950/30"
-                  : "border-gray-700 bg-gray-900 hover:border-gray-500"
+                  ? "border-blue-400 !bg-blue-50/40"
+                  : "border-white/40 hover:border-blue-300/60"
               }`}
             >
-              <Upload className="h-8 w-8 text-gray-500" />
-              <span className="text-sm text-gray-400">{t.uploadHint}</span>
+              <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-100/60 backdrop-blur-sm">
+                <Upload className="h-6 w-6 text-blue-500" />
+              </div>
+              <span className="text-sm text-gray-500">{t.uploadHint}</span>
               <input
                 ref={fileRef}
                 type="file"
@@ -288,26 +303,28 @@ export default function Home() {
                       setFiles([]);
                       if (fileRef.current) fileRef.current.value = "";
                     }}
-                    className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+                    className="text-xs text-gray-400 hover:text-red-500 transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5 inline mr-1" />
                     {locale === "en" ? "Clear all" : "Wyczyść"}
                   </button>
                 </div>
-                <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
                   {files.map((f) => (
                     <div
                       key={f.name}
-                      className="flex items-center gap-2 rounded-lg bg-gray-800/60 px-3 py-2 text-sm group"
+                      className="glass flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm group"
                     >
-                      <FileText className="h-4 w-4 text-indigo-400 shrink-0" />
-                      <span className="text-gray-300 truncate flex-1">{f.name}</span>
-                      <span className="text-xs text-gray-600">
+                      <FileText className="h-4 w-4 text-blue-500 shrink-0" />
+                      <span className="text-gray-700 truncate flex-1">
+                        {f.name}
+                      </span>
+                      <span className="text-xs text-gray-400">
                         {(f.size / 1024).toFixed(0)} KB
                       </span>
                       <button
                         onClick={() => removeFile(f.name)}
-                        className="text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                        className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -321,7 +338,7 @@ export default function Home() {
 
         {/* Error */}
         {error && (
-          <div className="rounded-xl border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          <div className="rounded-2xl border border-red-200/60 bg-red-50/50 backdrop-blur-sm px-4 py-3 text-sm text-red-600">
             {error}
           </div>
         )}
@@ -331,7 +348,7 @@ export default function Home() {
           <button
             onClick={analyze}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 font-medium text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="glass-btn inline-flex items-center gap-2 rounded-2xl px-7 py-3.5 font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
           >
             {loading ? (
               <>
@@ -351,17 +368,17 @@ export default function Home() {
         {results.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-200">
-                <Users className="h-5 w-5 text-indigo-400" />
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-800">
+                <Users className="h-5 w-5 text-blue-500" />
                 {t.resultHeading}
-                <span className="text-sm font-normal text-gray-500">
+                <span className="text-sm font-normal text-gray-400">
                   ({results.length})
                 </span>
               </h2>
               {results.some((r) => r.status === "done") && (
                 <button
                   onClick={toggleAll}
-                  className="text-xs text-gray-400 hover:text-gray-200 transition-colors"
+                  className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
                 >
                   {allExpanded ? t.collapseAll : t.expandAll}
                 </button>
@@ -372,33 +389,31 @@ export default function Home() {
               {results.map((r) => (
                 <div
                   key={r.id}
-                  className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden transition-all"
+                  className="glass-heavy rounded-2xl overflow-hidden transition-all"
                 >
-                  {/* Collapsed header — always visible */}
+                  {/* Collapsed header */}
                   <button
                     onClick={() => toggleExpand(r.id)}
-                    className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-800/50 transition-colors"
+                    className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-white/20 transition-colors cursor-pointer"
                   >
                     {r.expanded ? (
-                      <ChevronDown className="h-4 w-4 text-gray-500 shrink-0" />
+                      <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
                     ) : (
-                      <ChevronRight className="h-4 w-4 text-gray-500 shrink-0" />
+                      <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
                     )}
 
-                    <FileText className="h-4 w-4 text-indigo-400 shrink-0" />
+                    <FileText className="h-4 w-4 text-blue-500 shrink-0" />
 
-                    <span className="font-medium text-gray-200 truncate flex-1">
+                    <span className="font-medium text-gray-800 truncate flex-1">
                       {r.fileName.replace(/\.(pdf|docx)$/i, "")}
                     </span>
 
-                    {/* Match badge */}
                     {r.matchPercent && (
-                      <span className="shrink-0 rounded-full bg-indigo-900/50 border border-indigo-700/50 px-2.5 py-0.5 text-xs font-semibold text-indigo-300">
+                      <span className="shrink-0 rounded-full bg-blue-100/60 border border-blue-200/50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
                         {t.matchLabel}: {r.matchPercent}
                       </span>
                     )}
 
-                    {/* Recommendation badge */}
                     {r.recommendation && (
                       <span
                         className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${recBadgeColor(r.recommendation)}`}
@@ -407,9 +422,8 @@ export default function Home() {
                       </span>
                     )}
 
-                    {/* Status indicator */}
                     {r.status === "streaming" && (
-                      <span className="shrink-0 flex items-center gap-1 text-xs text-amber-400">
+                      <span className="shrink-0 flex items-center gap-1 text-xs text-amber-600">
                         <Loader2 className="h-3 w-3 animate-spin" />
                         {t.statusStreaming}
                       </span>
@@ -424,11 +438,11 @@ export default function Home() {
 
                   {/* Expanded content */}
                   {r.expanded && (
-                    <div className="border-t border-gray-800 px-5 py-5">
+                    <div className="border-t border-white/30 px-5 py-5">
                       {r.status === "error" ? (
-                        <p className="text-sm text-red-300">{r.content}</p>
+                        <p className="text-sm text-red-600">{r.content}</p>
                       ) : (
-                        <article className="prose prose-invert prose-sm max-w-none prose-headings:text-indigo-300 prose-strong:text-gray-200 prose-li:text-gray-300">
+                        <article className="prose prose-sm max-w-none prose-headings:text-blue-700 prose-strong:text-gray-800 prose-li:text-gray-600 prose-p:text-gray-600">
                           <ReactMarkdown>{r.content}</ReactMarkdown>
                         </article>
                       )}
@@ -442,7 +456,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 py-4 text-center text-xs text-gray-600">
+      <footer className="py-4 text-center text-xs text-gray-400">
         AI HR Assistant &middot; Powered by Groq &amp; Vercel AI SDK
       </footer>
     </div>
