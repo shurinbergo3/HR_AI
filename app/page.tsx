@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { dict, type Locale } from "@/lib/locale";
+import { LogoFull } from "./components/Logo";
 
 interface CandidateResult {
   id: string;
@@ -214,14 +215,7 @@ export default function Home() {
       {/* Header */}
       <header className="glass-heavy sticky top-0 z-50 rounded-b-2xl">
         <div className="mx-auto max-w-5xl flex items-center justify-between px-5 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 shadow-md shadow-blue-500/20">
-              <Sparkles className="h-4 w-4 text-white" />
-            </div>
-            <span className="font-semibold text-lg tracking-tight text-gray-800">
-              {t.title}
-            </span>
-          </div>
+          <LogoFull iconSize={36} />
           <button
             onClick={() => setLocale((l) => (l === "en" ? "pl" : "en"))}
             className="glass flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
@@ -234,8 +228,8 @@ export default function Home() {
 
       {/* Main */}
       <main className="flex-1 mx-auto w-full max-w-5xl px-4 py-10 space-y-8">
-        <div className="text-center space-y-1">
-          <h1 className="text-2xl font-bold text-gray-800">
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
             {t.title}
           </h1>
           <p className="text-gray-500">{t.subtitle}</p>
