@@ -9,103 +9,101 @@ export function LogoIcon({ size = 36 }: { size?: number }) {
     >
       <defs>
         <linearGradient id="logo-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#60A5FA" />
-          <stop offset="50%" stopColor="#818CF8" />
-          <stop offset="100%" stopColor="#A78BFA" />
+          <stop offset="0%" stopColor="#3B82F6" />
+          <stop offset="55%" stopColor="#6366F1" />
+          <stop offset="100%" stopColor="#8B5CF6" />
         </linearGradient>
-        <linearGradient id="logo-glass" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+
+        <radialGradient id="logo-radial" cx="30%" cy="20%" r="80%">
           <stop offset="0%" stopColor="white" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="white" stopOpacity="0.05" />
+          <stop offset="60%" stopColor="white" stopOpacity="0" />
+        </radialGradient>
+
+        <linearGradient id="logo-top-highlight" x1="32" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="white" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="white" stopOpacity="0" />
         </linearGradient>
-        <linearGradient id="logo-accent" x1="20" y1="16" x2="44" y2="52" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="white" stopOpacity="0.95" />
-          <stop offset="100%" stopColor="white" stopOpacity="0.75" />
+
+        <linearGradient id="logo-border" x1="32" y1="0" x2="32" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="white" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="white" stopOpacity="0.08" />
         </linearGradient>
-        <filter id="logo-glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="2" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+
+        <radialGradient id="sparkle-grad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="white" stopOpacity="1" />
+          <stop offset="100%" stopColor="white" stopOpacity="0.9" />
+        </radialGradient>
+
+        <filter id="sparkle-glow" x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="1.4" />
         </filter>
-        <clipPath id="logo-clip">
-          <rect x="0" y="0" width="64" height="64" rx="16" />
-        </clipPath>
+
+        <filter id="logo-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="0.6" />
+        </filter>
       </defs>
 
-      {/* Background rounded square */}
-      <rect width="64" height="64" rx="16" fill="url(#logo-bg)" />
+      {/* Soft drop shadow ground */}
+      <rect x="0" y="2" width="64" height="62" rx="14" fill="black" fillOpacity="0.06" />
 
-      {/* Glass overlay */}
-      <rect width="64" height="64" rx="16" fill="url(#logo-glass)" />
+      {/* Background gradient */}
+      <rect width="64" height="64" rx="14" fill="url(#logo-bg)" />
 
-      {/* Inner border for glass depth */}
+      {/* Radial light from top-left (glass depth) */}
+      <rect width="64" height="64" rx="14" fill="url(#logo-radial)" />
+
+      {/* Top highlight strip (glass) */}
+      <rect width="64" height="32" rx="14" fill="url(#logo-top-highlight)" />
+
+      {/* Inner border (glass edge) */}
       <rect
-        x="1" y="1" width="62" height="62" rx="15"
-        stroke="white" strokeOpacity="0.25" strokeWidth="1" fill="none"
-      />
-
-      {/* Person head */}
-      <circle cx="32" cy="22" r="7" fill="url(#logo-accent)" />
-
-      {/* Person body arc */}
-      <path
-        d="M18 48 C18 38, 24 32, 32 32 C40 32, 46 38, 46 48"
-        stroke="url(#logo-accent)"
-        strokeWidth="5"
-        strokeLinecap="round"
+        x="0.75" y="0.75" width="62.5" height="62.5" rx="13.25"
         fill="none"
+        stroke="url(#logo-border)"
+        strokeWidth="1"
       />
 
-      {/* AI neural nodes */}
-      <g filter="url(#logo-glow)">
-        {/* Top-right sparkle node */}
-        <circle cx="47" cy="14" r="2.5" fill="white" fillOpacity="0.9" />
-        <circle cx="47" cy="14" r="4.5" fill="white" fillOpacity="0.15" />
+      {/* Person silhouette — head */}
+      <g filter="url(#logo-shadow)">
+        <circle cx="30" cy="25" r="6.5" fill="white" />
+      </g>
+      <circle cx="30" cy="25" r="6.5" fill="white" />
 
-        {/* Connection line from head to node */}
-        <line
-          x1="37" y1="17" x2="45" y2="15"
-          stroke="white" strokeOpacity="0.4" strokeWidth="1" strokeDasharray="2 2"
-        />
+      {/* Person silhouette — shoulders/torso (filled, more presence) */}
+      <path
+        d="M16 50 C16 40.5, 22.2 34.5, 30 34.5 C37.8 34.5, 44 40.5, 44 50 L44 52 C44 53.1, 43.1 54, 42 54 L18 54 C16.9 54, 16 53.1, 16 52 Z"
+        fill="white"
+      />
 
-        {/* Small accent node left */}
-        <circle cx="15" cy="18" r="1.8" fill="white" fillOpacity="0.7" />
-        <circle cx="15" cy="18" r="3.5" fill="white" fillOpacity="0.1" />
-
-        {/* Connection line */}
-        <line
-          x1="25" y1="20" x2="17" y2="18"
-          stroke="white" strokeOpacity="0.3" strokeWidth="1" strokeDasharray="2 2"
-        />
-
-        {/* Bottom sparkle */}
-        <circle cx="50" cy="40" r="2" fill="white" fillOpacity="0.6" />
-        <circle cx="50" cy="40" r="3.5" fill="white" fillOpacity="0.1" />
-
-        {/* Connection to body */}
-        <line
-          x1="45" y1="40" x2="48" y2="40"
-          stroke="white" strokeOpacity="0.25" strokeWidth="1" strokeDasharray="2 2"
+      {/* AI sparkle — single elegant 4-point star */}
+      <g>
+        <circle cx="48" cy="16" r="5" fill="white" fillOpacity="0.18" filter="url(#sparkle-glow)" />
+        <path
+          d="M48 10
+             C48 13, 48.4 14, 51 14
+             C53.6 14, 54 14.4, 54 16
+             C54 17.6, 53.6 18, 51 18
+             C48.4 18, 48 19, 48 22
+             C48 19, 47.6 18, 45 18
+             C42.4 18, 42 17.6, 42 16
+             C42 14.4, 42.4 14, 45 14
+             C47.6 14, 48 13, 48 10 Z"
+          fill="url(#sparkle-grad)"
         />
       </g>
-
-      {/* Top-left light reflection */}
-      <ellipse
-        cx="22" cy="14" rx="12" ry="6"
-        fill="white" fillOpacity="0.1"
-        clipPath="url(#logo-clip)"
-      />
     </svg>
   );
 }
 
 export function LogoFull({ iconSize = 36 }: { iconSize?: number }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex items-center gap-3">
       <LogoIcon size={iconSize} />
-      <div className="flex flex-col leading-tight">
-        <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
+      <div className="flex flex-col leading-none gap-1">
+        <span className="text-[18px] font-bold tracking-tight bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
           HR AI
         </span>
-        <span className="text-[10px] font-medium text-gray-400 tracking-widest uppercase">
+        <span className="text-[9px] font-semibold text-gray-400 tracking-[0.18em] uppercase">
           Assistant
         </span>
       </div>
