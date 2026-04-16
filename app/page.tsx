@@ -132,7 +132,7 @@ export default function Home() {
         fileName: file.name,
         content: "",
         status: "streaming",
-        expanded: false,
+        expanded: true,
         matchPercent: null,
         recommendation: null,
       },
@@ -235,9 +235,9 @@ export default function Home() {
           <p className="text-gray-500">{t.subtitle}</p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2 md:auto-rows-fr">
           {/* Job Description */}
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-gray-600 ml-1">
               {t.jobDescLabel}
             </label>
@@ -245,88 +245,87 @@ export default function Home() {
               value={jobDesc}
               onChange={(e) => setJobDesc(e.target.value)}
               placeholder={t.jobDescPlaceholder}
-              rows={12}
-              className="glass-input w-full rounded-2xl px-4 py-3.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40 resize-none transition-shadow"
+              className="glass-input w-full flex-1 min-h-[280px] rounded-2xl px-4 py-3.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40 resize-none transition-shadow"
             />
           </div>
 
           {/* File Upload */}
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-gray-600 ml-1">
               {t.uploadLabel}
             </label>
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop}
-              onClick={() => fileRef.current?.click()}
-              className={`glass flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 cursor-pointer transition-all ${
-                files.length > 0 ? "py-8" : "py-16"
-              } ${
-                dragOver
-                  ? "border-blue-400 !bg-blue-50/40"
-                  : "border-white/40 hover:border-blue-300/60"
-              }`}
-            >
-              <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-100/60 backdrop-blur-sm">
-                <Upload className="h-6 w-6 text-blue-500" />
+            <div className="flex flex-col flex-1 gap-2">
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                onClick={() => fileRef.current?.click()}
+                className={`glass flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 cursor-pointer transition-all flex-1 min-h-[140px] ${
+                  dragOver
+                    ? "border-blue-400 !bg-blue-50/40"
+                    : "border-white/40 hover:border-blue-300/60"
+                }`}
+              >
+                <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-100/60 backdrop-blur-sm">
+                  <Upload className="h-6 w-6 text-blue-500" />
+                </div>
+                <span className="text-sm text-gray-500">{t.uploadHint}</span>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".pdf,.docx"
+                  multiple
+                  onChange={onFileChange}
+                  className="hidden"
+                />
               </div>
-              <span className="text-sm text-gray-500">{t.uploadHint}</span>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".pdf,.docx"
-                multiple
-                onChange={onFileChange}
-                className="hidden"
-              />
-            </div>
 
-            {/* File list */}
-            {files.length > 0 && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-xs text-gray-500">
-                    {files.length} {t.uploadedFiles}
-                  </span>
-                  <button
-                    onClick={() => {
-                      setFiles([]);
-                      if (fileRef.current) fileRef.current.value = "";
-                    }}
-                    className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 inline mr-1" />
-                    {locale === "en" ? "Clear all" : "Wyczyść"}
-                  </button>
-                </div>
-                <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                  {files.map((f) => (
-                    <div
-                      key={f.name}
-                      className="glass flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm group"
+              {/* File list */}
+              {files.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs text-gray-500">
+                      {files.length} {t.uploadedFiles}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setFiles([]);
+                        if (fileRef.current) fileRef.current.value = "";
+                      }}
+                      className="text-xs text-gray-400 hover:text-red-500 transition-colors"
                     >
-                      <FileText className="h-4 w-4 text-blue-500 shrink-0" />
-                      <span className="text-gray-700 truncate flex-1">
-                        {f.name}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {(f.size / 1024).toFixed(0)} KB
-                      </span>
-                      <button
-                        onClick={() => removeFile(f.name)}
-                        className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      <Trash2 className="h-3.5 w-3.5 inline mr-1" />
+                      {locale === "en" ? "Clear all" : "Wyczyść"}
+                    </button>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                    {files.map((f) => (
+                      <div
+                        key={f.name}
+                        className="glass flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm group"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                        <FileText className="h-4 w-4 text-blue-500 shrink-0" />
+                        <span className="text-gray-700 truncate flex-1">
+                          {f.name}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {(f.size / 1024).toFixed(0)} KB
+                        </span>
+                        <button
+                          onClick={() => removeFile(f.name)}
+                          className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
