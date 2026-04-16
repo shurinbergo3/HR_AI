@@ -7,7 +7,6 @@ import {
   useEffect,
   type DragEvent,
   type ChangeEvent,
-  type KeyboardEvent,
 } from "react";
 import {
   Upload,
@@ -257,7 +256,7 @@ export default function Home() {
   };
 
   const toggleExpand = (id: string) => {
-    updateResult(id, { expanded: results.find((r) => r.id === id)?.expanded === false });
+    setResults((prev) => prev.map((r) => r.id === id ? { ...r, expanded: !r.expanded } : r));
   };
 
   const allExpanded = results.length > 0 && results.every((r) => r.expanded);
@@ -267,9 +266,6 @@ export default function Home() {
   };
 
   // --- Chat ---
-  const activeResult = results.find((r) => r.id === activeChatId) ?? null;
-  const activeMessages = activeChatId ? (chatHistories[activeChatId] ?? []) : [];
-
   const sendChatMessage = async (overrideMsg?: string, overrideId?: string) => {
     const targetId = overrideId ?? activeChatId;
     const message = overrideMsg ?? chatInput.trim();
@@ -348,13 +344,6 @@ export default function Home() {
       });
     } finally {
       setChatLoading(false);
-    }
-  };
-
-  const onChatKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendChatMessage();
     }
   };
 
@@ -583,7 +572,7 @@ export default function Home() {
                             navigator.clipboard.writeText(r.content).then(() => {
                               setCopiedId(r.id);
                               setTimeout(() => setCopiedId(null), 2000);
-                            });
+                            }).catch(() => {});
                           }}
                           className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium glass transition-all cursor-pointer text-gray-500 hover:text-gray-700"
                           title="Copy report"
