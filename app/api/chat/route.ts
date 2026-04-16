@@ -17,54 +17,75 @@ const groq = createOpenAI({
 });
 
 function buildSystemPrompt(language: string) {
-  return `You are an elite, professional HR Tech Recruiter with 10 years of experience hiring for IT, Marketing, and C-level roles. You evaluate candidates with clinical precision, balancing empathy with strict business logic.
+  return `You are a senior HR consultant (15yr exp). Respond entirely in ${language}. You can read any language but always output in ${language}.
 
-SCORING PHILOSOPHY:
-- Never do simple keyword matching. Understand the INTENT behind each requirement.
-- A candidate who has built production AI systems (LLM, RAG, agents) and knows Python clearly has the foundation to learn scikit-learn/PyTorch quickly — this is adjacent, not missing.
-- Distinguish levels of skill gaps:
-    * CRITICAL gap: missing a mandatory hard skill with no adjacent proof of competence (e.g., zero Python, zero data work) → penalize heavily
-    * COACHABLE gap: missing a specific library/tool but strong in the domain (e.g., knows LLMs/AI deployment but hasn't used scikit-learn specifically) → minor deduction only (-5 to -10%)
-    * SOFT gap: nice-to-have requirement not met → almost no deduction (-2 to -5%)
-- STRONGLY reward: evidence of fast learning, self-taught projects, practical production deployments, cross-domain expertise.
-- A candidate with 80% of hard skills + strong learning trajectory should score HIGHER than a candidate with 80% of hard skills but no growth indicators.
-- Default bias: optimistic. Err on the side of surfacing talent. A false negative (missing a good candidate) is more costly than a false positive (interviewing someone who falls short).
+SCORING (mandatory thresholds):
+- <65% → "Do Not Hire"
+- 65-79% → "Hold for Interview"
+- ≥80% → "Hire"
 
-HIRING DECISION THRESHOLDS (MANDATORY — never override these):
-- Match < 65%  → MUST recommend "Do Not Hire". No exceptions.
-- Match 65–79% → MUST recommend "Hold for Interview".
-- Match ≥ 80%  → MUST recommend "Hire".
-These thresholds are absolute. The match percentage drives the recommendation, not the other way around.
+GAP WEIGHTING:
+- Critical (no adjacent skill): -20-30%
+- Coachable (wrong tool, right domain): -5-10%
+- Optional (nice-to-have): -2-5%
+- Reward: fast-learner signals, production deployments, cross-domain XP → +5-10%
+- Default bias: optimistic. False negative > false positive in cost.
 
-CRITICAL DIRECTIVE: You must generate your ENTIRE response (including all headings and body text) in ${language}. Do not use any other language.
+TONE: Analytical, concise, zero filler. Interview questions must be advanced/technical targeting exact gaps.
 
-CRITICAL TONE AND TRANSLATION RULES:
-1. Be highly analytical, concise, and direct. Eliminate filler words and generic corporate speak.
-2. Interview questions MUST be advanced, technical, or behavioral, targeting the EXACT missing skills in the resume. Never ask basic questions like "Tell me about your experience".
-3. Use professional local HR terminology. For Russian: use "Резерв" (Hold), "Зоны риска" (Weaknesses), "Отказ" (Do Not Hire). For Polish: use "Zapas" (Hold), "Obszary ryzyka" (Weaknesses), "Odrzuć" (Do Not Hire).
-
-You are multilingual. The Job Description and Candidate Resume may be written in different languages (e.g., one in English and one in Polish, or both in the same language). You MUST read and understand ALL provided texts regardless of their original language, then produce your analysis ONLY in ${language}.
-
-Analyze the provided Job Description and Candidate Resume. Structure your response EXACTLY as follows using Markdown (ensure these exact headings and concepts are translated into ${language}):
+OUTPUT FORMAT (translate headings to ${language}):
 
 ## 1. Match Percentage
-[Give a specific % score]
+[X%]
 
 ## 2. Hiring Recommendation
-[Clear "Hire", "Do Not Hire", or "Hold for Interview" with a concise justification based on hard facts from the text]
+["Hire" / "Do Not Hire" / "Hold for Interview" + 1-sentence justification]
 
 ## 3. Deep Resume Analysis
-* **Strengths:** [List 3-4 key alignments with the job]
-* **Weaknesses/Red Flags:** [List missing skills, employment gaps, or weak formatting]
+* **Strengths:** [3-4 points]
+* **Weaknesses/Red Flags:** [gaps, missing skills]
 
 ## 4. Candidate Prognosis
-[Predict trainability, cultural fit, work style, and what the employer can realistically expect from this person in the first 3 months.]
+[Trainability, cultural fit, 3-month outlook]
 
 ## 5. HR Notes
-[Any additional professional insights, e.g., suggested interview questions or warning signs to double-check].
+[Advanced interview questions targeting specific gaps]
 
 ## 6. Final Verdict
-[2-3 sentences max. Synthesize everything above into one clear, decisive conclusion: should the company invest time in this candidate and why. End with a single actionable next step.]`;
+[2-3 sentences. One actionable next step.]`;
+}
+
+function parseGroqError(err: unknown): { message: string; status: number } {
+  if (!(err instanceof Error)) return { message: "Internal server error", status: 500 };
+
+  const msg = err.message;
+
+  // Daily token limit
+  if (msg.includes("tokens per day") || msg.includes("TPD")) {
+    const retryMatch = msg.match(/try again in ([\d]+m[\d.]+s|[\d.]+s)/i);
+    const retryIn = retryMatch ? ` Please try again in ${retryMatch[1]}.` : "";
+    return {
+      message: `Groq daily token limit reached (100k/day on free tier).${retryIn} Upgrade at https://console.groq.com/settings/billing`,
+      status: 429,
+    };
+  }
+
+  // Per-minute token limit
+  if (msg.includes("tokens per minute") || msg.includes("TPM")) {
+    const retryMatch = msg.match(/try again in ([\d.]+s)/i);
+    const retryIn = retryMatch ? ` Retry in ${retryMatch[1]}.` : " Please wait a moment.";
+    return {
+      message: `Rate limit: too many tokens per minute.${retryIn}`,
+      status: 429,
+    };
+  }
+
+  // Request rate limit
+  if (msg.includes("rate_limit_exceeded") || msg.includes("Rate limit")) {
+    return { message: "Rate limit reached. Please wait a moment and try again.", status: 429 };
+  }
+
+  return { message: msg || "Internal server error", status: 500 };
 }
 
 async function extractText(file: File): Promise<string> {
@@ -86,7 +107,6 @@ async function extractText(file: File): Promise<string> {
 
 export async function POST(req: Request) {
   try {
-    // Rate limiting — extract real IP behind proxies/CDN
     const headersList = await headers();
     const ip =
       headersList.get("x-forwarded-for")?.split(",")[0].trim() ??
@@ -96,14 +116,10 @@ export async function POST(req: Request) {
     const { allowed, retryAfterSec } = checkRateLimit(ip);
     if (!allowed) {
       return new Response(
-        JSON.stringify({ error: `Too many requests. Please wait ${retryAfterSec} seconds.` }),
+        `Too many requests. Please wait ${retryAfterSec} seconds.`,
         {
           status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "Retry-After": String(retryAfterSec),
-            "X-RateLimit-Limit": "10",
-          },
+          headers: { "Retry-After": String(retryAfterSec) },
         },
       );
     }
@@ -121,7 +137,7 @@ export async function POST(req: Request) {
     const resumeText = await extractText(resumeFile);
 
     const additionalSection = additionalInfo.trim()
-      ? `\n\n## Additional Information About This Candidate\n\n${additionalInfo.trim()}`
+      ? `\n\n## Additional Information\n\n${additionalInfo.trim()}`
       : "";
 
     const result = streamText({
@@ -130,7 +146,7 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "user",
-          content: `## Job Description\n\n${jobDescription}\n\n## Candidate Resume\n\n${resumeText}${additionalSection}`,
+          content: `## Job Description\n\n${jobDescription}\n\n## Resume\n\n${resumeText}${additionalSection}`,
         },
       ],
     });
@@ -138,7 +154,7 @@ export async function POST(req: Request) {
     return result.toTextStreamResponse();
   } catch (err: unknown) {
     console.error("API route error:", err);
-    const message = err instanceof Error ? err.message : "Internal server error";
-    return new Response(message, { status: 500 });
+    const { message, status } = parseGroqError(err);
+    return new Response(message, { status });
   }
 }

@@ -78,7 +78,15 @@ BEHAVIOR RULES:
     return result.toTextStreamResponse();
   } catch (err: unknown) {
     console.error("HR chat route error:", err);
-    const message = err instanceof Error ? err.message : "Internal server error";
-    return new Response(message, { status: 500 });
+    const msg = err instanceof Error ? err.message : "Internal server error";
+    const isTokenLimit = msg.includes("tokens per day") || msg.includes("TPD");
+    const isRateLimit = msg.includes("rate_limit_exceeded") || msg.includes("Rate limit");
+    if (isTokenLimit) {
+      const retryMatch = msg.match(/try again in ([\d]+m[\d.]+s|[\d.]+s)/i);
+      const retryIn = retryMatch ? ` Try again in ${retryMatch[1]}.` : "";
+      return new Response(`Groq daily token limit reached.${retryIn}`, { status: 429 });
+    }
+    if (isRateLimit) return new Response("Rate limit reached. Please wait a moment.", { status: 429 });
+    return new Response(msg, { status: 500 });
   }
 }

@@ -107,6 +107,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
+  const [groqLimitUntil, setGroqLimitUntil] = useState<number | null>(null);
+  const [groqCountdown, setGroqCountdown] = useState<string | null>(null);
 
   // Chat state
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -117,6 +119,21 @@ export default function Home() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const t = dict[locale];
+
+  // Live countdown for Groq rate limit
+  useEffect(() => {
+    if (!groqLimitUntil) { setGroqCountdown(null); return; }
+    const tick = () => {
+      const remaining = Math.max(0, groqLimitUntil - Date.now());
+      if (remaining === 0) { setGroqCountdown(null); setGroqLimitUntil(null); return; }
+      const m = Math.floor(remaining / 60000);
+      const s = Math.floor((remaining % 60000) / 1000);
+      setGroqCountdown(m > 0 ? `${m}m ${s}s` : `${s}s`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [groqLimitUntil]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -171,7 +188,22 @@ export default function Home() {
       if (candidate.additionalInfo.trim()) formData.append("additionalInfo", candidate.additionalInfo.trim());
 
       const res = await fetch("/api/chat", { method: "POST", body: formData });
-      if (!res.ok) throw new Error((await res.text()) || t.errorGeneric);
+      if (!res.ok) {
+        const text = await res.text();
+        if (res.status === 429 && (text.includes("daily token limit") || text.includes("tokens per day") || text.includes("TPD"))) {
+          const retryMatch = text.match(/try again in (\d+)m([\d.]+)s/i)
+            ?? text.match(/try again in ([\d.]+)s/i);
+          if (retryMatch) {
+            const totalSec = retryMatch.length === 3
+              ? parseInt(retryMatch[1]) * 60 + parseFloat(retryMatch[2])
+              : parseFloat(retryMatch[1]);
+            setGroqLimitUntil(Date.now() + Math.ceil(totalSec) * 1000);
+          } else {
+            setGroqLimitUntil(Date.now() + 30 * 60 * 1000); // fallback 30min
+          }
+        }
+        throw new Error(text || t.errorGeneric);
+      }
 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
@@ -185,8 +217,11 @@ export default function Home() {
         const summary = extractSummary(buf);
         updateResult(id, { content: buf, ...summary });
       }
+      // Flush any remaining bytes held by the decoder
+      buf += decoder.decode();
 
-      updateResult(id, { status: "done", ...extractSummary(buf) });
+      const finalSummary = extractSummary(buf);
+      updateResult(id, { status: "done", content: buf, ...finalSummary });
     } catch (err: unknown) {
       updateResult(id, { status: "error", content: err instanceof Error ? err.message : t.errorGeneric });
     }
@@ -196,6 +231,7 @@ export default function Home() {
     if (!jobDesc.trim()) return setError(t.errorNoJob);
     if (candidates.length === 0) return setError(t.errorNoResume);
     setError("");
+    setGroqLimitUntil(null);
     setResults([]);
     setChatHistories({});
     setActiveChatId(null);
@@ -295,6 +331,41 @@ export default function Home() {
             >
               {t.bannerDismiss}
               <X className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Groq token limit error banner */}
+      {groqLimitUntil && (
+        <div className="bg-orange-50/90 backdrop-blur-sm border-b border-orange-200/70 px-4 py-3">
+          <div className="mx-auto max-w-5xl flex items-start gap-3">
+            <AlertCircle className="h-4 w-4 text-orange-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-orange-800 mb-0.5">
+                Groq Daily Token Limit Reached
+                {groqCountdown && (
+                  <span className="ml-2 font-mono bg-orange-100 text-orange-900 rounded px-1.5 py-0.5">
+                    {groqCountdown}
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-orange-700">
+                Free tier limit: 100,000 tokens/day.
+                {groqCountdown
+                  ? ` Retry available in ${groqCountdown}.`
+                  : " Limit has reset — you can try again."}
+                {" "}Upgrade at{" "}
+                <a href="https://console.groq.com/settings/billing" target="_blank" rel="noopener noreferrer" className="underline hover:text-orange-900">
+                  console.groq.com
+                </a>.
+              </p>
+            </div>
+            <button
+              onClick={() => { setGroqLimitUntil(null); setGroqCountdown(null); }}
+              className="shrink-0 text-orange-500 hover:text-orange-700 transition-colors"
+            >
+              <X className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -484,6 +555,16 @@ export default function Home() {
                     <div className="border-t border-white/30 px-5 py-5">
                       {r.status === "error" ? (
                         <p className="text-sm text-red-600">{r.content}</p>
+                      ) : r.status === "streaming" && !r.content ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>{t.statusStreaming}</span>
+                        </div>
+                      ) : r.status === "done" && !r.content ? (
+                        <div className="flex items-center gap-2 text-sm text-amber-600 py-2">
+                          <AlertCircle className="h-4 w-4 shrink-0" />
+                          <span>No content received. Please click Analyze Candidates again.</span>
+                        </div>
                       ) : (
                         <article className="prose prose-sm max-w-none prose-headings:text-blue-700 prose-strong:text-gray-800 prose-li:text-gray-600 prose-p:text-gray-600">
                           <ReactMarkdown>{r.content}</ReactMarkdown>
@@ -562,8 +643,13 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="py-4 text-center text-xs text-gray-400">
-        AI HR Assistant &middot; Powered by Groq &amp; Vercel AI SDK
+      <footer className="py-4 text-center text-xs text-gray-400 space-y-1">
+        <p>AI HR Assistant &middot; Powered by Groq &amp; Vercel AI SDK</p>
+        <p>
+          <a href="mailto:sumotry@gmail.com" className="text-indigo-400 hover:text-indigo-300 transition-colors">
+            sumotry@gmail.com
+          </a>
+        </p>
       </footer>
     </div>
   );
