@@ -3,6 +3,19 @@ import { streamText } from "ai";
 import { headers } from "next/headers";
 import { checkRateLimit } from "@/lib/rateLimit";
 
+function parseGroqError(err: unknown): string {
+  // AI_RetryError wraps the real error — check message chain
+  const raw = err instanceof Error ? err.message : String(err);
+  const retryFull = raw.match(/try again in (\d+)m([\d.]+)s/i);
+  const retryShort = raw.match(/try again in ([\d.]+)s/i);
+  let retrySec = 1800;
+  if (retryFull) retrySec = parseInt(retryFull[1]) * 60 + parseFloat(retryFull[2]);
+  else if (retryShort) retrySec = parseFloat(retryShort[1]);
+
+  const isDay = raw.includes("tokens per day") || raw.includes("TPD") || raw.includes("per day");
+  return isDay ? `GROQ_TOKEN_DAY_LIMIT:${Math.ceil(retrySec)}` : `GROQ_RATE_LIMIT:${Math.ceil(retrySec)}`;
+}
+
 const apiKey = process.env.GROQ_API_KEY;
 if (!apiKey) throw new Error("GROQ_API_KEY is not set in environment variables.");
 
@@ -73,6 +86,7 @@ BEHAVIOR RULES:
       model: groq("llama-3.3-70b-versatile"),
       system: systemPrompt,
       messages,
+      maxRetries: 0,
     });
 
     const encoder = new TextEncoder();
@@ -83,16 +97,7 @@ BEHAVIOR RULES:
             controller.enqueue(encoder.encode(chunk));
           }
         } catch (err) {
-          const raw = err instanceof Error ? err.message : String(err);
-          const retryFull = raw.match(/try again in (\d+)m([\d.]+)s/i);
-          const retryShort = raw.match(/try again in ([\d.]+)s/i);
-          let retrySec = 1800;
-          if (retryFull) retrySec = parseInt(retryFull[1]) * 60 + parseFloat(retryFull[2]);
-          else if (retryShort) retrySec = parseFloat(retryShort[1]);
-
-          const isDay = raw.includes("tokens per day") || raw.includes("TPD");
-          const code = isDay ? `GROQ_TOKEN_DAY_LIMIT:${retrySec}` : `GROQ_RATE_LIMIT:${retrySec}`;
-          controller.enqueue(encoder.encode(`__ERROR__:${code}`));
+          controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(err)}`));
         } finally {
           controller.close();
         }
@@ -102,6 +107,6 @@ BEHAVIOR RULES:
     return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   } catch (err: unknown) {
     console.error("HR chat route error:", err);
-    return new Response("__ERROR__:Internal server error", { status: 200 });
+    return new Response(`__ERROR__:${parseGroqError(err)}`, { status: 200 });
   }
 }

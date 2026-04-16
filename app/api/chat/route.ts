@@ -136,6 +136,7 @@ export async function POST(req: Request) {
           content: `## Job Description\n\n${jobDescription}\n\n## Resume\n\n${resumeText}${additionalSection}`,
         },
       ],
+      maxRetries: 0,
     });
 
     // Stream manually so errors mid-stream are caught and encoded as markers
