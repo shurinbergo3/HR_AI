@@ -25,6 +25,8 @@ import {
   X,
   Send,
   Info,
+  Copy,
+  Check,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { dict, type Locale } from "@/lib/locale";
@@ -112,6 +114,7 @@ export default function Home() {
 
   // Chat state
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [chatHistories, setChatHistories] = useState<Record<string, ChatMessage[]>>({});
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -564,7 +567,25 @@ export default function Home() {
                       {r.status === "done" && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
                       {r.status === "error" && <AlertCircle className="h-4 w-4 text-red-500" />}
 
-                      {/* Chat button — only when analysis is done */}
+                      {/* Copy + Chat buttons — only when analysis is done */}
+                      {r.status === "done" && r.content && (
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(r.content).then(() => {
+                              setCopiedId(r.id);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            });
+                          }}
+                          className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium glass transition-all cursor-pointer text-gray-500 hover:text-gray-700"
+                          title="Copy report"
+                        >
+                          {copiedId === r.id ? (
+                            <><Check className="h-3.5 w-3.5 text-emerald-500" /><span className="text-emerald-600">Copied</span></>
+                          ) : (
+                            <><Copy className="h-3.5 w-3.5" />Copy</>
+                          )}
+                        </button>
+                      )}
                       {r.status === "done" && (
                         <button
                           onClick={() => setActiveChatId(activeChatId === r.id ? null : r.id)}

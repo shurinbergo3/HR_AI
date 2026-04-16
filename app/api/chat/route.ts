@@ -127,7 +127,7 @@ export async function POST(req: Request) {
       ? `\n\n## Additional Information\n\n${additionalInfo.trim()}`
       : "";
 
-    const { textStream } = streamText({
+    const result = streamText({
       model: groq("llama-3.3-70b-versatile"),
       system: buildSystemPrompt(language),
       messages: [
@@ -139,13 +139,18 @@ export async function POST(req: Request) {
       maxRetries: 0,
     });
 
-    // Stream manually so errors mid-stream are caught and encoded as markers
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of textStream) {
-            controller.enqueue(encoder.encode(chunk));
+          for await (const event of result.fullStream) {
+            if (event.type === "text-delta") {
+              controller.enqueue(encoder.encode(event.textDelta));
+            } else if (event.type === "error") {
+              const { message } = parseGroqError(event.error);
+              controller.enqueue(encoder.encode(`__ERROR__:${message}`));
+              return;
+            }
           }
         } catch (err) {
           const { message } = parseGroqError(err);

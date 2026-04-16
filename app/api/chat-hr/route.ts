@@ -82,7 +82,7 @@ BEHAVIOR RULES:
 5. Never fabricate information about the candidate that is not in the analysis or resume.
 6. You may suggest interview questions, flag risks, compare to role requirements, or give hiring advice — all grounded in the analysis above.`;
 
-    const { textStream } = streamText({
+    const result = streamText({
       model: groq("llama-3.3-70b-versatile"),
       system: systemPrompt,
       messages,
@@ -93,8 +93,13 @@ BEHAVIOR RULES:
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of textStream) {
-            controller.enqueue(encoder.encode(chunk));
+          for await (const event of result.fullStream) {
+            if (event.type === "text-delta") {
+              controller.enqueue(encoder.encode(event.textDelta));
+            } else if (event.type === "error") {
+              controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(event.error)}`));
+              return;
+            }
           }
         } catch (err) {
           controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(err)}`));
