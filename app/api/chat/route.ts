@@ -16,6 +16,11 @@ function buildSystemPrompt(language: string) {
 
 CRITICAL DIRECTIVE: You must generate your ENTIRE response (including all headings and body text) in ${language}. Do not use any other language.
 
+CRITICAL TONE AND TRANSLATION RULES:
+1. Be highly analytical, concise, and direct. Eliminate filler words and generic corporate speak.
+2. Interview questions MUST be advanced, technical, or behavioral, targeting the EXACT missing skills in the resume. Never ask basic questions like "Tell me about your experience".
+3. Use professional local HR terminology. For Russian: use "Резерв" (Hold), "Зоны риска" (Weaknesses), "Отказ" (Do Not Hire). For Polish: use "Zapas" (Hold), "Obszary ryzyka" (Weaknesses), "Odrzuć" (Do Not Hire).
+
 You are multilingual. The Job Description and Candidate Resume may be written in different languages (e.g., one in English and one in Polish, or both in the same language). You MUST read and understand ALL provided texts regardless of their original language, then produce your analysis ONLY in ${language}.
 
 Analyze the provided Job Description and Candidate Resume. Structure your response EXACTLY as follows using Markdown (ensure these exact headings and concepts are translated into ${language}):
