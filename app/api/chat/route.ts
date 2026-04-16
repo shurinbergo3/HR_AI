@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     const resumeText = await extractText(resumeFile);
 
     const result = streamText({
-      model: groq("llama3-70b-8192"),
+      model: groq("llama-3.3-70b-versatile"),
       system: buildSystemPrompt(language),
       messages: [
         {
