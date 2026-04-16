@@ -1,7 +1,6 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { streamText } from "ai";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse");
+import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 
 const groq = createOpenAI({
@@ -14,7 +13,9 @@ function buildSystemPrompt(language: string) {
 
 CRITICAL DIRECTIVE: You must generate your ENTIRE response (including all headings and body text) in ${language}. Do not use any other language.
 
-Analyze the provided Job Description and Candidate Resume. Structure your response EXACTLY as follows using Markdown (ensure these exact concepts are translated into ${language}):
+You are multilingual. The Job Description and Candidate Resume may be written in different languages (e.g., one in English and one in Polish, or both in the same language). You MUST read and understand ALL provided texts regardless of their original language, then produce your analysis ONLY in ${language}.
+
+Analyze the provided Job Description and Candidate Resume. Structure your response EXACTLY as follows using Markdown (ensure these exact headings and concepts are translated into ${language}):
 
 ## 1. Match Percentage
 [Give a specific % score]
@@ -38,8 +39,9 @@ async function extractText(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
 
   if (ext === "pdf") {
-    const data = await pdfParse(buffer);
-    return data.text;
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+    return result.pages.map((p) => p.text).join("\n");
   }
 
   if (ext === "docx") {
@@ -76,6 +78,7 @@ export async function POST(req: Request) {
 
     return result.toTextStreamResponse();
   } catch (err: unknown) {
+    console.error("API route error:", err);
     const message = err instanceof Error ? err.message : "Internal server error";
     return new Response(message, { status: 500 });
   }
