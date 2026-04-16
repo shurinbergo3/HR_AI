@@ -1,7 +1,10 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { streamText } from "ai";
-import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
+
+// pdf-parse v1 only has CJS export
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require("pdf-parse/lib/pdf-parse");
 
 const groq = createOpenAI({
   baseURL: "https://api.groq.com/openai/v1",
@@ -39,9 +42,8 @@ async function extractText(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
 
   if (ext === "pdf") {
-    const parser = new PDFParse({ data: buffer });
-    const result = await parser.getText();
-    return result.pages.map((p) => p.text).join("\n");
+    const data = await pdfParse(buffer);
+    return data.text;
   }
 
   if (ext === "docx") {
