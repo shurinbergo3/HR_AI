@@ -80,11 +80,11 @@ function recBadgeColor(rec: string | null): string {
 function recBadgeLabel(rec: string): string {
   const lower = rec.toLowerCase();
   if (lower.includes("not hire") || lower.includes("nie zatrudniaj") || lower.includes("отказ") || lower.includes("odrzuć"))
-    return "Отказ";
+    return "Do Not Hire";
   if (lower.includes("hold") || lower.includes("wstrzymaj") || lower.includes("резерв") || lower.includes("zapas"))
-    return "Пригласить на интервью";
+    return "Invite to Interview";
   if (lower.includes("hire") || lower.includes("zatrudnij"))
-    return "Нанять";
+    return "Hire";
   return rec;
 }
 
