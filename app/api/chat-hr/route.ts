@@ -24,6 +24,13 @@ const groq = createOpenAI({
   apiKey,
 });
 
+const FALLBACK_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"] as const;
+
+function isDayLimit(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("tokens per day") || msg.includes("TPD");
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -82,30 +89,47 @@ BEHAVIOR RULES:
 5. Never fabricate information about the candidate that is not in the analysis or resume.
 6. You may suggest interview questions, flag risks, compare to role requirements, or give hiring advice — all grounded in the analysis above.`;
 
-    const result = streamText({
-      model: groq("llama-3.3-70b-versatile"),
-      system: systemPrompt,
-      messages,
-      maxRetries: 0,
-    });
-
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        try {
-          for await (const event of result.fullStream) {
-            if (event.type === "text-delta") {
-              controller.enqueue(encoder.encode(event.textDelta));
-            } else if (event.type === "error") {
-              controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(event.error)}`));
+        let lastErr: unknown = null;
+
+        for (const model of FALLBACK_MODELS) {
+          let dayLimitHit = false;
+
+          const result = streamText({
+            model: groq(model),
+            system: systemPrompt,
+            messages,
+            maxRetries: 0,
+          });
+
+          try {
+            for await (const event of result.fullStream) {
+              if (event.type === "text-delta") {
+                controller.enqueue(encoder.encode(event.textDelta));
+              } else if (event.type === "error") {
+                if (isDayLimit(event.error)) { dayLimitHit = true; lastErr = event.error; break; }
+                controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(event.error)}`));
+                controller.close();
+                return;
+              }
+            }
+          } catch (err) {
+            if (isDayLimit(err)) { dayLimitHit = true; lastErr = err; }
+            else {
+              controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(err)}`));
+              controller.close();
               return;
             }
           }
-        } catch (err) {
-          controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(err)}`));
-        } finally {
-          controller.close();
+
+          if (!dayLimitHit) { controller.close(); return; }
         }
+
+        // All models exhausted
+        controller.enqueue(encoder.encode(`__ERROR__:${parseGroqError(lastErr)}`));
+        controller.close();
       },
     });
 

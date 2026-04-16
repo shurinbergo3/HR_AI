@@ -16,6 +16,14 @@ const groq = createOpenAI({
   apiKey,
 });
 
+// Models tried in order — each has its own daily quota
+const FALLBACK_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"] as const;
+
+function isDayLimit(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("tokens per day") || msg.includes("TPD");
+}
+
 function buildSystemPrompt(language: string) {
   return `You are a senior HR consultant (15yr exp). Respond entirely in ${language}. You can read any language but always output in ${language}.
 
@@ -127,37 +135,58 @@ export async function POST(req: Request) {
       ? `\n\n## Additional Information\n\n${additionalInfo.trim()}`
       : "";
 
-    const result = streamText({
-      model: groq("llama-3.3-70b-versatile"),
-      system: buildSystemPrompt(language),
-      messages: [
-        {
-          role: "user",
-          content: `## Job Description\n\n${jobDescription}\n\n## Resume\n\n${resumeText}${additionalSection}`,
-        },
-      ],
-      maxRetries: 0,
-    });
+    const messages = [
+      {
+        role: "user" as const,
+        content: `## Job Description\n\n${jobDescription}\n\n## Resume\n\n${resumeText}${additionalSection}`,
+      },
+    ];
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        try {
-          for await (const event of result.fullStream) {
-            if (event.type === "text-delta") {
-              controller.enqueue(encoder.encode(event.textDelta));
-            } else if (event.type === "error") {
-              const { message } = parseGroqError(event.error);
+        let lastErr: unknown = null;
+
+        for (const model of FALLBACK_MODELS) {
+          let dayLimitHit = false;
+
+          const result = streamText({
+            model: groq(model),
+            system: buildSystemPrompt(language),
+            messages,
+            maxRetries: 0,
+          });
+
+          try {
+            for await (const event of result.fullStream) {
+              if (event.type === "text-delta") {
+                controller.enqueue(encoder.encode(event.textDelta));
+              } else if (event.type === "error") {
+                if (isDayLimit(event.error)) { dayLimitHit = true; lastErr = event.error; break; }
+                const { message } = parseGroqError(event.error);
+                controller.enqueue(encoder.encode(`__ERROR__:${message}`));
+                controller.close();
+                return;
+              }
+            }
+          } catch (err) {
+            if (isDayLimit(err)) { dayLimitHit = true; lastErr = err; }
+            else {
+              const { message } = parseGroqError(err);
               controller.enqueue(encoder.encode(`__ERROR__:${message}`));
+              controller.close();
               return;
             }
           }
-        } catch (err) {
-          const { message } = parseGroqError(err);
-          controller.enqueue(encoder.encode(`__ERROR__:${message}`));
-        } finally {
-          controller.close();
+
+          if (!dayLimitHit) { controller.close(); return; }
+          // else try next model
         }
+
+        // All models exhausted
+        const { message } = parseGroqError(lastErr);
+        controller.enqueue(encoder.encode(`__ERROR__:${message}`));
+        controller.close();
       },
     });
 
