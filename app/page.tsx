@@ -24,9 +24,15 @@ import ReactMarkdown from "react-markdown";
 import { dict, type Locale } from "@/lib/locale";
 import { LogoFull } from "./components/Logo";
 
+interface CandidateFile {
+  file: File;
+  additionalInfo: string;
+}
+
 interface CandidateResult {
   id: string;
   fileName: string;
+  candidateNumber: number;
   content: string;
   status: "streaming" | "done" | "error";
   expanded: boolean;
@@ -64,11 +70,22 @@ function extractSummary(md: string) {
 function recBadgeColor(rec: string | null): string {
   if (!rec) return "bg-gray-200/60 text-gray-600";
   const lower = rec.toLowerCase();
-  if (lower.includes("not") || lower.includes("nie"))
+  if (lower.includes("not") || lower.includes("nie") || lower.includes("отказ") || lower.includes("odrzuć"))
     return "bg-red-100/70 text-red-700 border border-red-200/60";
-  if (lower.includes("hold") || lower.includes("wstrzymaj"))
+  if (lower.includes("hold") || lower.includes("wstrzymaj") || lower.includes("резерв") || lower.includes("zapas"))
     return "bg-amber-100/70 text-amber-700 border border-amber-200/60";
   return "bg-emerald-100/70 text-emerald-700 border border-emerald-200/60";
+}
+
+function recBadgeLabel(rec: string): string {
+  const lower = rec.toLowerCase();
+  if (lower.includes("not hire") || lower.includes("nie zatrudniaj") || lower.includes("отказ") || lower.includes("odrzuć"))
+    return "Отказ";
+  if (lower.includes("hold") || lower.includes("wstrzymaj") || lower.includes("резерв") || lower.includes("zapas"))
+    return "Пригласить на интервью";
+  if (lower.includes("hire") || lower.includes("zatrudnij"))
+    return "Нанять";
+  return rec;
 }
 
 function isValidFile(f: File): boolean {
@@ -79,7 +96,7 @@ function isValidFile(f: File): boolean {
 export default function Home() {
   const [locale, setLocale] = useState<Locale>("en");
   const [jobDesc, setJobDesc] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const [candidates, setCandidates] = useState<CandidateFile[]>([]);
   const [results, setResults] = useState<CandidateResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -90,16 +107,24 @@ export default function Home() {
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
     const valid = Array.from(incoming).filter(isValidFile);
-    setFiles((prev) => {
-      const existingNames = new Set(prev.map((f) => f.name));
-      const fresh = valid.filter((f) => !existingNames.has(f.name));
+    setCandidates((prev) => {
+      const existingNames = new Set(prev.map((c) => c.file.name));
+      const fresh = valid
+        .filter((f) => !existingNames.has(f.name))
+        .map((f) => ({ file: f, additionalInfo: "" }));
       return [...prev, ...fresh];
     });
     setError("");
   }, []);
 
-  const removeFile = (name: string) => {
-    setFiles((prev) => prev.filter((f) => f.name !== name));
+  const removeCandidate = (name: string) => {
+    setCandidates((prev) => prev.filter((c) => c.file.name !== name));
+  };
+
+  const updateAdditionalInfo = (name: string, info: string) => {
+    setCandidates((prev) =>
+      prev.map((c) => (c.file.name === name ? { ...c, additionalInfo: info } : c)),
+    );
   };
 
   const onDrop = useCallback(
@@ -122,14 +147,20 @@ export default function Home() {
     );
   };
 
-  const analyzeOne = async (file: File, jobDescription: string, language: string) => {
-    const id = `${file.name}-${Date.now()}`;
+  const analyzeOne = async (
+    candidate: CandidateFile,
+    candidateNumber: number,
+    jobDescription: string,
+    language: string,
+  ) => {
+    const id = `${candidate.file.name}-${Date.now()}`;
 
     setResults((prev) => [
       ...prev,
       {
         id,
-        fileName: file.name,
+        fileName: candidate.file.name,
+        candidateNumber,
         content: "",
         status: "streaming",
         expanded: true,
@@ -141,8 +172,11 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append("jobDescription", jobDescription);
-      formData.append("resume", file);
+      formData.append("resume", candidate.file);
       formData.append("language", language);
+      if (candidate.additionalInfo.trim()) {
+        formData.append("additionalInfo", candidate.additionalInfo.trim());
+      }
 
       const res = await fetch("/api/chat", { method: "POST", body: formData });
 
@@ -183,7 +217,7 @@ export default function Home() {
 
   const analyze = async () => {
     if (!jobDesc.trim()) return setError(t.errorNoJob);
-    if (files.length === 0) return setError(t.errorNoResume);
+    if (candidates.length === 0) return setError(t.errorNoResume);
 
     setError("");
     setResults([]);
@@ -192,7 +226,9 @@ export default function Home() {
     const language = locale === "en" ? "English" : "Polish";
 
     await Promise.all(
-      files.map((file) => analyzeOne(file, jobDesc, language)),
+      candidates.map((candidate, index) =>
+        analyzeOne(candidate, index + 1, jobDesc, language),
+      ),
     );
 
     setLoading(false);
@@ -254,7 +290,8 @@ export default function Home() {
             <label className="text-sm font-medium text-gray-600 ml-1">
               {t.uploadLabel}
             </label>
-            <div className="flex flex-col flex-1 gap-2">
+            <div className="flex flex-col flex-1 gap-3">
+              {/* Drop zone */}
               <div
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -263,7 +300,7 @@ export default function Home() {
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
                 onClick={() => fileRef.current?.click()}
-                className={`glass flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 cursor-pointer transition-all flex-1 min-h-[140px] ${
+                className={`glass flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 py-10 cursor-pointer transition-all ${
                   dragOver
                     ? "border-blue-400 !bg-blue-50/40"
                     : "border-white/40 hover:border-blue-300/60"
@@ -283,16 +320,16 @@ export default function Home() {
                 />
               </div>
 
-              {/* File list */}
-              {files.length > 0 && (
-                <div className="space-y-1.5">
+              {/* Candidate list with additional info */}
+              {candidates.length > 0 && (
+                <div className="space-y-2">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-xs text-gray-500">
-                      {files.length} {t.uploadedFiles}
+                      {candidates.length} {t.uploadedFiles}
                     </span>
                     <button
                       onClick={() => {
-                        setFiles([]);
+                        setCandidates([]);
                         if (fileRef.current) fileRef.current.value = "";
                       }}
                       className="text-xs text-gray-400 hover:text-red-500 transition-colors"
@@ -301,25 +338,36 @@ export default function Home() {
                       {locale === "en" ? "Clear all" : "Wyczyść"}
                     </button>
                   </div>
-                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                    {files.map((f) => (
-                      <div
-                        key={f.name}
-                        className="glass flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm group"
-                      >
-                        <FileText className="h-4 w-4 text-blue-500 shrink-0" />
-                        <span className="text-gray-700 truncate flex-1">
-                          {f.name}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          {(f.size / 1024).toFixed(0)} KB
-                        </span>
-                        <button
-                          onClick={() => removeFile(f.name)}
-                          className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                  <div className="max-h-64 overflow-y-auto space-y-2.5 pr-1">
+                    {candidates.map((c, index) => (
+                      <div key={c.file.name} className="glass rounded-xl overflow-hidden">
+                        {/* File row */}
+                        <div className="flex items-center gap-2 px-3 py-2.5 text-sm group">
+                          <span className="shrink-0 text-xs font-bold text-blue-600 bg-blue-100/60 rounded-full px-1.5 py-0.5 leading-none">
+                            #{index + 1}
+                          </span>
+                          <FileText className="h-4 w-4 text-blue-500 shrink-0" />
+                          <span className="text-gray-700 truncate flex-1">{c.file.name}</span>
+                          <span className="text-xs text-gray-400">
+                            {(c.file.size / 1024).toFixed(0)} KB
+                          </span>
+                          <button
+                            onClick={() => removeCandidate(c.file.name)}
+                            className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        {/* Additional info */}
+                        <div className="px-3 pb-2.5">
+                          <textarea
+                            value={c.additionalInfo}
+                            onChange={(e) => updateAdditionalInfo(c.file.name, e.target.value)}
+                            placeholder="Additional information about this candidate (optional)..."
+                            rows={2}
+                            className="w-full rounded-xl border border-white/50 bg-white/30 px-3 py-2 text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400/40 resize-none transition-shadow"
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -384,7 +432,7 @@ export default function Home() {
                   key={r.id}
                   className="glass-heavy rounded-2xl overflow-hidden transition-all"
                 >
-                  {/* Collapsed header */}
+                  {/* Header */}
                   <button
                     onClick={() => toggleExpand(r.id)}
                     className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-white/20 transition-colors cursor-pointer"
@@ -397,9 +445,14 @@ export default function Home() {
 
                     <FileText className="h-4 w-4 text-blue-500 shrink-0" />
 
-                    <span className="font-medium text-gray-800 truncate flex-1">
-                      {r.fileName.replace(/\.(pdf|docx)$/i, "")}
-                    </span>
+                    <div className="flex items-baseline gap-2 truncate flex-1">
+                      <span className="text-xs font-bold text-blue-600 bg-blue-100/60 rounded-full px-2 py-0.5 shrink-0">
+                        #{r.candidateNumber}
+                      </span>
+                      <span className="font-medium text-gray-800 truncate">
+                        {r.fileName.replace(/\.(pdf|docx)$/i, "")}
+                      </span>
+                    </div>
 
                     {r.matchPercent && (
                       <span className="shrink-0 rounded-full bg-blue-100/60 border border-blue-200/50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
@@ -411,7 +464,7 @@ export default function Home() {
                       <span
                         className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${recBadgeColor(r.recommendation)}`}
                       >
-                        {r.recommendation}
+                        {recBadgeLabel(r.recommendation)}
                       </span>
                     )}
 

@@ -1,14 +1,19 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { streamText } from "ai";
 import mammoth from "mammoth";
+import { headers } from "next/headers";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 // pdf-parse v1 only has CJS export
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require("pdf-parse/lib/pdf-parse");
 
+const apiKey = process.env.GROQ_API_KEY;
+if (!apiKey) throw new Error("GROQ_API_KEY is not set in environment variables.");
+
 const groq = createOpenAI({
   baseURL: "https://api.groq.com/openai/v1",
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey,
 });
 
 function buildSystemPrompt(language: string) {
@@ -45,7 +50,10 @@ Analyze the provided Job Description and Candidate Resume. Structure your respon
 [Predict trainability, cultural fit, work style, and what the employer can realistically expect from this person in the first 3 months.]
 
 ## 5. HR Notes
-[Any additional professional insights, e.g., suggested interview questions or warning signs to double-check].`;
+[Any additional professional insights, e.g., suggested interview questions or warning signs to double-check].
+
+## 6. Final Verdict
+[2-3 sentences max. Synthesize everything above into one clear, decisive conclusion: should the company invest time in this candidate and why. End with a single actionable next step.]`;
 }
 
 async function extractText(file: File): Promise<string> {
@@ -67,10 +75,33 @@ async function extractText(file: File): Promise<string> {
 
 export async function POST(req: Request) {
   try {
+    // Rate limiting — extract real IP behind proxies/CDN
+    const headersList = await headers();
+    const ip =
+      headersList.get("x-forwarded-for")?.split(",")[0].trim() ??
+      headersList.get("x-real-ip") ??
+      "unknown";
+
+    const { allowed, retryAfterSec } = checkRateLimit(ip);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ error: `Too many requests. Please wait ${retryAfterSec} seconds.` }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(retryAfterSec),
+            "X-RateLimit-Limit": "10",
+          },
+        },
+      );
+    }
+
     const formData = await req.formData();
     const jobDescription = formData.get("jobDescription") as string;
     const resumeFile = formData.get("resume") as File;
     const language = (formData.get("language") as string) || "English";
+    const additionalInfo = (formData.get("additionalInfo") as string | null) || "";
 
     if (!jobDescription || !resumeFile) {
       return new Response("Missing job description or resume file.", { status: 400 });
@@ -78,13 +109,17 @@ export async function POST(req: Request) {
 
     const resumeText = await extractText(resumeFile);
 
+    const additionalSection = additionalInfo.trim()
+      ? `\n\n## Additional Information About This Candidate\n\n${additionalInfo.trim()}`
+      : "";
+
     const result = streamText({
       model: groq("llama-3.3-70b-versatile"),
       system: buildSystemPrompt(language),
       messages: [
         {
           role: "user",
-          content: `## Job Description\n\n${jobDescription}\n\n## Candidate Resume\n\n${resumeText}`,
+          content: `## Job Description\n\n${jobDescription}\n\n## Candidate Resume\n\n${resumeText}${additionalSection}`,
         },
       ],
     });
