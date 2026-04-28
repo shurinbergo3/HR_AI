@@ -26,10 +26,15 @@ import {
   Info,
   Copy,
   Check,
+  Shield,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { dict, quickQuestions, type Locale } from "@/lib/locale";
 import { LogoFull } from "./components/Logo";
+import { CookieConsent } from "./components/CookieConsent";
+import { PrivacyPolicy } from "./components/PrivacyPolicy";
+
+const RODO_STORAGE_KEY = "hr-ai-rodo-consent-v1";
 
 interface CandidateFile {
   file: File;
@@ -110,6 +115,8 @@ export default function Home() {
   const [showBanner, setShowBanner] = useState(true);
   const [groqLimitUntil, setGroqLimitUntil] = useState<number | null>(null);
   const [groqCountdown, setGroqCountdown] = useState<string | null>(null);
+  const [rodoConsent, setRodoConsent] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   // Chat state
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -121,6 +128,19 @@ export default function Home() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const t = dict[locale];
+
+  // Restore RODO consent from prior session
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(RODO_STORAGE_KEY) === "1") setRodoConsent(true);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (rodoConsent) localStorage.setItem(RODO_STORAGE_KEY, "1");
+    } catch {}
+  }, [rodoConsent]);
 
   // Live countdown for Groq rate limit
   useEffect(() => {
@@ -244,6 +264,7 @@ export default function Home() {
   const analyze = async () => {
     if (!jobDesc.trim()) return setError(t.errorNoJob);
     if (candidates.length === 0) return setError(t.errorNoResume);
+    if (!rodoConsent) return setError(t.rodoRequired);
     setError("");
     setGroqLimitUntil(null);
     setResults([]);
@@ -504,10 +525,47 @@ export default function Home() {
           <div className="rounded-2xl border border-red-200/60 bg-red-50/50 backdrop-blur-sm px-4 py-3 text-sm text-red-600">{error}</div>
         )}
 
+        {/* RODO / GDPR consent */}
+        <div className="glass rounded-2xl p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <div className="shrink-0 w-9 h-9 rounded-xl bg-indigo-100/70 flex items-center justify-center">
+              <Shield className="h-4 w-4 text-indigo-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-gray-800">{t.rodoLabel}</div>
+              <label className="mt-2 flex items-start gap-2 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={rodoConsent}
+                  onChange={(e) => {
+                    setRodoConsent(e.target.checked);
+                    try {
+                      if (!e.target.checked) localStorage.removeItem(RODO_STORAGE_KEY);
+                    } catch {}
+                    if (e.target.checked && error === t.rodoRequired) setError("");
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-400 cursor-pointer"
+                />
+                <span className="text-xs text-gray-700 leading-relaxed">
+                  {t.rodoConsentText}{" "}
+                  <button
+                    type="button"
+                    onClick={() => setPrivacyOpen(true)}
+                    className="underline text-indigo-600 hover:text-indigo-800 transition-colors"
+                  >
+                    {t.privacyPolicy}
+                  </button>
+                  .
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div className="flex justify-center">
           <button
             onClick={analyze}
-            disabled={loading}
+            disabled={loading || !rodoConsent}
             className="glass-btn inline-flex items-center gap-2 rounded-2xl px-7 py-3.5 font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
           >
             {loading ? <><Loader2 className="h-4 w-4 animate-spin" />{t.analyzingBtn}</> : <><Sparkles className="h-4 w-4" />{t.analyzeBtn}</>}
@@ -711,12 +769,23 @@ export default function Home() {
 
       <footer className="py-4 text-center text-xs text-gray-400 space-y-1">
         <p>AI HR Assistant &middot; Powered by Groq &amp; Vercel AI SDK</p>
-        <p>
+        <p className="text-gray-400">{t.footerRights}</p>
+        <p className="flex items-center justify-center gap-2 flex-wrap">
           <a href="mailto:sumotry@gmail.com" className="text-indigo-400 hover:text-indigo-300 transition-colors">
             sumotry@gmail.com
           </a>
+          <span aria-hidden>&middot;</span>
+          <button
+            onClick={() => setPrivacyOpen(true)}
+            className="text-indigo-400 hover:text-indigo-300 transition-colors underline-offset-2 hover:underline"
+          >
+            {t.privacyPolicyLong}
+          </button>
         </p>
       </footer>
+
+      <CookieConsent locale={locale} onOpenPolicy={() => setPrivacyOpen(true)} />
+      <PrivacyPolicy open={privacyOpen} onClose={() => setPrivacyOpen(false)} locale={locale} />
     </div>
   );
 }
