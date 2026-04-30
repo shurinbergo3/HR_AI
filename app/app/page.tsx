@@ -1026,6 +1026,7 @@ export default function Home() {
           </section>
         )}
       </main>
+      </div>
 
       <footer className="py-4 text-center text-xs text-gray-400 space-y-1">
         <p>AI HR Assistant &middot; Powered by Groq &amp; Vercel AI SDK</p>
