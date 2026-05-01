@@ -33,6 +33,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import Link from "next/link";
 import { dict, quickQuestions, type Locale } from "@/lib/locale";
 import { LogoFull } from "../components/Logo";
 import { CookieConsent } from "../components/CookieConsent";
@@ -144,7 +145,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
-  const [showBanner, setShowBanner] = useState(true);
   const [groqLimitUntil, setGroqLimitUntil] = useState<number | null>(null);
   const [groqCountdown, setGroqCountdown] = useState<string | null>(null);
   const [rodoConsent, setRodoConsent] = useState(false);
@@ -486,23 +486,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Dismissable banner */}
-      {showBanner && (
-        <div className="relative bg-amber-50/80 backdrop-blur-sm border-b border-amber-200/60 px-4 py-2.5">
-          <div className="mx-auto max-w-5xl flex items-start gap-3">
-            <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-800 flex-1">{t.bannerText}</p>
-            <button
-              onClick={() => setShowBanner(false)}
-              className="shrink-0 text-xs font-medium text-amber-700 hover:text-amber-900 transition-colors flex items-center gap-1"
-            >
-              {t.bannerDismiss}
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Groq token limit error banner */}
       {groqLimitUntil && (
         <div className="bg-orange-50/90 backdrop-blur-sm border-b border-orange-200/70 px-4 py-3">
@@ -549,7 +532,9 @@ export default function Home() {
             >
               <Menu className="h-4 w-4" />
             </button>
-            <LogoFull iconSize={36} />
+            <Link href={locale === "pl" ? "/pl" : "/"} aria-label="Home" className="rounded-xl hover:opacity-80 transition-opacity">
+              <LogoFull iconSize={36} />
+            </Link>
           </div>
           <div className="flex items-center gap-2">
             <button

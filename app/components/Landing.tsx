@@ -48,6 +48,12 @@ export function Landing({ c }: { c: LandingContent }) {
               <a href="#how-it-works" className="hover:text-gray-900 transition">{c.nav.howItWorks}</a>
               <a href="#use-cases" className="hover:text-gray-900 transition">{c.nav.useCases}</a>
               <a href="#faq" className="hover:text-gray-900 transition">{c.nav.faq}</a>
+              <Link
+                href={c.langSwitch.href === "/" ? "/pl/blog" : "/blog"}
+                className="hover:text-gray-900 transition"
+              >
+                {c.nav.blog}
+              </Link>
             </div>
             <div className="flex items-center gap-2">
               <Link
@@ -424,6 +430,12 @@ export function Landing({ c }: { c: LandingContent }) {
           <div className="flex flex-col md:items-end gap-2">
             <div className="flex items-center gap-5 text-sm text-gray-600">
               <Link href="/app" className="hover:text-gray-900 transition">{c.footer.appLink}</Link>
+              <Link
+                href={c.langSwitch.href === "/" ? "/pl/blog" : "/blog"}
+                className="hover:text-gray-900 transition"
+              >
+                {c.footer.blogLink}
+              </Link>
               <a href="#features" className="hover:text-gray-900 transition">{c.footer.featuresLink}</a>
               <a href="#faq" className="hover:text-gray-900 transition">{c.footer.faqLink}</a>
               <Link

@@ -3,7 +3,7 @@ import { Landing, buildJsonLd } from "../components/Landing";
 import { LandingShell } from "../components/LandingShell";
 import { landingPL } from "@/lib/landing-content";
 
-const SITE_URL = "https://hr-ai-assistant.vercel.app";
+const SITE_URL = "https://www.hr-ai.services";
 
 export const metadata: Metadata = {
   title: landingPL.meta.title,

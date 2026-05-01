@@ -6,7 +6,7 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin", "latin-ext"] });
 
-const SITE_URL = "https://hr-ai-assistant.vercel.app";
+const SITE_URL = "https://www.hr-ai.services";
 const SITE_NAME = "HR AI Assistant";
 const TITLE = "HR AI Assistant — AI Resume Screening & Candidate Analysis in Seconds";
 const DESCRIPTION =

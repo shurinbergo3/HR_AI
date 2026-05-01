@@ -27,6 +27,7 @@ export type LandingContent = {
     howItWorks: string;
     useCases: string;
     faq: string;
+    blog: string;
     openApp: string;
     homeAria: string;
     primaryAria: string;
@@ -96,6 +97,7 @@ export type LandingContent = {
     appLink: string;
     featuresLink: string;
     faqLink: string;
+    blogLink: string;
     copyright: (year: number) => string;
   };
   langSwitch: {
@@ -121,6 +123,7 @@ export const landingEN: LandingContent = {
     howItWorks: "How it works",
     useCases: "Use cases",
     faq: "FAQ",
+    blog: "Blog",
     openApp: "Open app",
     homeAria: "HR AI Assistant home",
     primaryAria: "Primary",
@@ -289,6 +292,7 @@ export const landingEN: LandingContent = {
     appLink: "App",
     featuresLink: "Features",
     faqLink: "FAQ",
+    blogLink: "Blog",
     copyright: (y) => `© ${y} HR AI Assistant · Built with Next.js & Groq`,
   },
   langSwitch: {
@@ -315,6 +319,7 @@ export const landingPL: LandingContent = {
     howItWorks: "Jak to działa",
     useCases: "Zastosowania",
     faq: "FAQ",
+    blog: "Blog",
     openApp: "Otwórz aplikację",
     homeAria: "Strona główna HR AI Assistant",
     primaryAria: "Główna nawigacja",
@@ -483,6 +488,7 @@ export const landingPL: LandingContent = {
     appLink: "Aplikacja",
     featuresLink: "Funkcje",
     faqLink: "FAQ",
+    blogLink: "Blog",
     copyright: (y) => `© ${y} HR AI Assistant · Zbudowane z Next.js i Groq`,
   },
   langSwitch: {
