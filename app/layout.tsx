@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { YandexMetrika } from "./components/YandexMetrika";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin", "latin-ext"] });
@@ -79,6 +80,9 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
+  verification: {
+    google: "axH0NEHDSMG7un5XLerYngt8w4LJR3Px042xqgIImHs",
+  },
 };
 
 export const viewport: Viewport = {
@@ -100,6 +104,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} text-gray-800 antialiased`}>
         <ErrorBoundary>{children}</ErrorBoundary>
+        <YandexMetrika />
       </body>
     </html>
   );

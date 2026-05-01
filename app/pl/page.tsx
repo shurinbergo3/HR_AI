@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Landing, buildJsonLd } from "../components/Landing";
+import { LandingShell } from "../components/LandingShell";
 import { landingPL } from "@/lib/landing-content";
 
 const SITE_URL = "https://hr-ai-assistant.vercel.app";
@@ -56,6 +57,7 @@ export default function PolishHomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(buildJsonLd(landingPL, SITE_URL, "pl")) }}
       />
       <Landing c={landingPL} />
+      <LandingShell locale="pl" />
     </>
   );
 }

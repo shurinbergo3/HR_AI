@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Landing, buildJsonLd } from "./components/Landing";
+import { LandingShell } from "./components/LandingShell";
 import { landingEN } from "@/lib/landing-content";
 
 const SITE_URL = "https://hr-ai-assistant.vercel.app";
@@ -39,6 +40,7 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(buildJsonLd(landingEN, SITE_URL, "en")) }}
       />
       <Landing c={landingEN} />
+      <LandingShell locale="en" />
     </>
   );
 }
